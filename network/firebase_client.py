@@ -1,19 +1,29 @@
-"""
-network/firebase_client.py
 
-Handles all Firebase communication for CapstoneQuillxo.
-Strokes are serialized as lists of dot dicts (x, y, size, color)
-to preserve the PaintDot-based drawing model.
+"""
+Multiplayer Drawing App — Firebase REST API + Pygame
+=====================================================
+Compatible with Python 3.13+ (no pyrebase dependency)
 
 Requirements:
-    pip install requests sseclient-py
+    pip install pygame requests sseclient-py
+    pip install python-dotenv
+
+Setup:
+    1. Fill in FIREBASE_CONFIG below
+    2. Run on multiple machines with the same ROOM_ID
 """
 
-import json
+import pygame
+import requests
 import threading
 import time
+import uuid
+import sys
+import json
 
-import requests
+import os 
+from dotenv import load_dotenv
+
 
 try:
     import sseclient
@@ -24,11 +34,16 @@ except ImportError:
     print("  pip install sseclient-py")
 
 
+load_dotenv()
+
 FIREBASE_CONFIG = {
-    "databaseURL": "https://partygames-ee33c-default-rtdb.firebaseio.com",
+    "databaseURL": os.getenv("FIREBASE_DATABASE_URL")
 }
 
-DB_URL = FIREBASE_CONFIG["databaseURL"].rstrip("/")
+print ( FIREBASE_CONFIG["databaseURL"] ) 
+print ( os.getenv("FIREBASE_DATABASE_URL") )
+
+DB_URL = FIREBASE_CONFIG["databaseURL"]
 
 
 class FirebaseClient:
