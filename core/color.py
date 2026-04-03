@@ -7,4 +7,9 @@ class Color(Enum):
     BUTTON_INACTIVE_GREY = (212, 212, 212)
     BUTTON_ACTIVE_GREY = (73, 72, 72)
 
-        
+class Tool(Enum):
+    BRUSH = 1
+    SPRAY = 2
+    MARKER = 3
+    BUCKET = 4
+    LINE = 5

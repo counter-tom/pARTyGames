@@ -15,7 +15,10 @@ class Button:
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
 
     def draw(self, surface):
-        color = Color.BUTTON_ACTIVE_GREY.value if self.check_hover() else Color.BUTTON_INACTIVE_GREY.value
+        if self.check_hover():
+            color = (26, 122, 84)   # hover color
+        else:
+            color = (44, 201, 138)      # normal color
         pygame.draw.rect(self.screen, color, self.rect, 0, 5)
 
         # Border

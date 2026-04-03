@@ -1,3 +1,4 @@
 class Stroke:
-    def __init__(self, dots):
-        self.dots = dots  # List of PaintDot objects
+    def __init__(self, dots, color=None):
+        self.dots = dots
+        self.color = color
