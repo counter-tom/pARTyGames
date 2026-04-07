@@ -37,11 +37,11 @@ tool_buttons.add_button("Bucket", (665, 245), lambda: setattr(umanager.get_activ
 tool_buttons.add_button("Line", (665, 280), lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.LINE))
 
 rgb_picker = RGBPicker(screen, 700, 370, font)
-
+all_button_rect = pygame.Rect(640, 0, 260, 900)
 menu_button_rect = pygame.Rect(665, 115, 150, 25)
 
 while running:
-    screen.fill((138, 44, 201)) #purple background
+    screen.fill(Color.PURPLE.value) #purple background
     events = pygame.event.get()
 
     top_buttons.update()
@@ -72,14 +72,15 @@ while running:
     if menu_open:
         hovering_ui = hovering_ui or tool_buttons.is_hovering_ui or rgb_picker.is_hovering()
 
-    umanager.update(hovering_ui, events)
 
     # draw canvas first
     umanager.draw()
 
+    pygame.draw.rect(screen, Color.PURPLE.value, all_button_rect)
+
     # draw UI next
     top_buttons.draw(screen)
-
+    
     # custom menu toggle button
     pygame.draw.rect(screen, Color.BUTTON_ACTIVE_GREY.value if menu_button_rect.collidepoint(pygame.mouse.get_pos()) else Color.BUTTON_INACTIVE_GREY.value, menu_button_rect, 0, 5)
     pygame.draw.rect(screen, Color.BLACK.value, menu_button_rect, 2, 5)
@@ -94,6 +95,9 @@ while running:
 
     # draw cursor LAST so it is visible over the menu
     umanager.draw_cursor()
+
+    umanager.update(hovering_ui, events)
+
 
     pygame.display.flip()
     clock.tick(60)
