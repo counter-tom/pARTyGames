@@ -1,3 +1,5 @@
+import pygame
+
 class FillCommand:
     def __init__(self, canvas, start_pos, fill_color):
         self.canvas = canvas
@@ -18,31 +20,50 @@ class FillCommand:
         self.canvas.makeDirty()
 
     def flood_fill(self, surface, start_pos, fill_color):
+        if surface.get_at(start_pos) == fill_color:
+            return
         width, height = surface.get_size()
+        pixels = pygame.PixelArray(surface)
         x, y = start_pos
-
+        
         if x < 0 or x >= width or y < 0 or y >= height:
+            del pixels
             return
 
-        target_color = surface.get_at((x, y))[:3]
+        target_color = pixels[x,y]
         if target_color == fill_color:
+            del pixels
             return
 
         stack = [(x, y)]
 
         while stack:
             px, py = stack.pop()
+           
+            x_left_bound = px
+            while x_left_bound > 0 and pixels[x_left_bound - 1, py] == target_color:
+                x_left_bound -= 1
+           
+            x_right_bound = px
+            while x_right_bound < width - 1 and pixels[x_right_bound + 1, py] == target_color:
+                x_right_bound += 1
+            
+            pixels[x_left_bound: x_right_bound + 1, py] = fill_color
 
-            if px < 0 or px >= width or py < 0 or py >= height:
-                continue
+            for dy in [-1, 1]:
+                ny = py + dy
+                if 0 <= ny < height:
+                    x_scan = x_left_bound
+                    while x_scan <= x_right_bound:
+                        # Look for a pixel that matches target_color
+                        if pixels[x_scan, ny] == target_color:
+                            stack.append((x_scan, ny))
+                            
+                
+                            while x_scan <= x_right_bound and pixels[x_scan, ny] == target_color:
+                                x_scan += 1
+                        else:
+                            x_scan += 1
 
-            current_color = surface.get_at((px, py))[:3]
-            if current_color != target_color:
-                continue
-
-            surface.set_at((px, py), fill_color)
-
-            stack.append((px + 1, py))
-            stack.append((px - 1, py))
-            stack.append((px, py + 1))
-            stack.append((px, py - 1))
+    
+        del pixels 
