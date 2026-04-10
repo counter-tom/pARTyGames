@@ -49,7 +49,8 @@ class UserManager:
             if canvas.strokes and canvas.strokes[-1] is not canvas._last_pushed_stroke:
                 latest = canvas.strokes[-1]
                 canvas._last_pushed_stroke = latest
-                self.firebase.push_stroke(latest, active_user.color)
+                if not latest.remote:          # <-- only push local strokes
+                    self.firebase.push_stroke(latest, active_user.color)
 
         # Apply incoming remote strokes onto the active canvas
         for stroke_dict in self.firebase.pop_incoming_strokes():
