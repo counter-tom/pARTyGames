@@ -192,22 +192,19 @@ class FirebaseClient:
         ).start()
 
     def _serialize_stroke(self, stroke, color) -> dict:
-        """
-        Convert a Stroke + Color into a Firebase-safe dict.
-        Dots are stored as {x, y, size} — size is inferred from surf width.
-        Color is stored as [r, g, b] from the Color enum value tuple.
-        """
+        # Normalize color to [r, g, b] regardless of type
+        if hasattr(color, "value"):
+            rgb = list(color.value)
+        else:
+            rgb = list(color)
+        
         dots = [
-            {
-                "x": dot.x,
-                "y": dot.y,
-                "size": dot.surf.get_width()
-            }
+            {"x": dot.x, "y": dot.y, "size": dot.surf.get_width()}
             for dot in stroke.dots
         ]
         return {
             "uid": self.user_id,
-            "color": list(color.value),
+            "color": rgb,
             "dots": dots,
             "ts": time.time()
         }
@@ -215,15 +212,18 @@ class FirebaseClient:
     # ── Clear ─────────────────────────────────────────────────────────────────
 
     def push_clear(self):
-        """
-        Delete all strokes in the room from Firebase.
-        Called when ClearCanvasCommand is executed.
-        """
         threading.Thread(
-            target=self._fb_delete,
-            args=(f"rooms/{self.room_id}/strokes",),
+            target=self._fb_set,
+            args=(f"rooms/{self.room_id}/strokes", {}),
             daemon=True
         ).start()
+
+    def _fb_set(self, path: str, data):
+        url = f"{DB_URL}/{path}.json"
+        try:
+            requests.put(url, json=data, timeout=5)
+        except Exception as e:
+            print(f"[Network] Set error: {e}")        
 
     # ── Firebase REST ─────────────────────────────────────────────────────────
 

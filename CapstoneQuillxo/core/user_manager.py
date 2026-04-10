@@ -6,7 +6,7 @@ from CapstoneQuillxo.canvas.master_canvas import MasterCanvas
 from CapstoneQuillxo.network import FirebaseClient
 from CapstoneQuillxo.network.stroke_deserializer import deserialize_stroke
 from CapstoneQuillxo.commands import DrawStrokeCommand
-
+from CapstoneQuillxo.commands.clear_canvas_command import ClearCanvasCommand
 
 class UserManager:
     def __init__(self):
@@ -39,19 +39,24 @@ class UserManager:
         if active_user is not None:
             active_user.update(is_cursor_on_ui)
 
-        # TEMPORARILY DISABLED:
-        # for some reason, this is interfering with drawing
-        # and causing strokes to erase themselves as soon
-        # as they are drawn. 
-        #
-        # self.master.composite()
-        # self.master.broadcast()
-        #
-        # for stroke_dict in self.firebase.pop_incoming_strokes():
-        #     stroke = deserialize_stroke(stroke_dict)
-        #     for canvas in self.master.canvases.values():
-        #         cmd = DrawStrokeCommand(canvas, stroke)
-        #         cmd.do()
+            canvas = active_user.canvas
+
+            # Lazy-init tracking attribute (avoids touching PaintCanvas)
+            if not hasattr(canvas, '_last_pushed_stroke'):
+                canvas._last_pushed_stroke = None
+
+            # Push the latest stroke to Firebase if it's new
+            if canvas.strokes and canvas.strokes[-1] is not canvas._last_pushed_stroke:
+                latest = canvas.strokes[-1]
+                canvas._last_pushed_stroke = latest
+                self.firebase.push_stroke(latest, active_user.color)
+
+        # Apply incoming remote strokes onto the active canvas
+        for stroke_dict in self.firebase.pop_incoming_strokes():
+            stroke = deserialize_stroke(stroke_dict)
+            if active_user is not None:
+                cmd = DrawStrokeCommand(active_user.canvas, stroke)
+                cmd.do()
 
     def draw(self):
         active_user = self.users.get(self.active_user_id)
@@ -62,3 +67,9 @@ class UserManager:
         active_user = self.users.get(self.active_user_id)
         if active_user is not None:
             active_user.draw_cursor()
+
+    def get_clear_command(self):
+        user = self.get_active_user()
+        if user is not None:
+            cmd = ClearCanvasCommand(user.canvas, self.firebase)
+            user.commander.execute(cmd)        

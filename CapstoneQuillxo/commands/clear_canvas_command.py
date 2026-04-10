@@ -1,15 +1,18 @@
 from CapstoneQuillxo.commands.command import Command
 
 
-class ClearCanvasCommand(Command):
-    def __init__(self, canvas):
+class ClearCanvasCommand:
+    def __init__(self, canvas, firebase=None):
         self.canvas = canvas
-        self.old_strokes = []
+        self.firebase = firebase
+        self.memento = None
 
     def do(self):
-        self.old_strokes = list(self.canvas.strokes)    # Backup strokes
-        self.canvas.clear()                             # Clear the canvas
+        self.memento = self.canvas.save()
+        self.canvas.clear()
+        if self.firebase is not None:
+            self.firebase.push_clear()
 
     def undo(self):
-        self.canvas.strokes = list(self.old_strokes)    # Restore backup strokes
-        self.canvas.rebuild_canvas()                    # Redraw strokes to canvas
+        if self.memento is not None:
+            self.canvas.restore(self.memento)
