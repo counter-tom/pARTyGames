@@ -166,6 +166,22 @@ class FirebaseClient:
             strokes = list(self._incoming)
             self._incoming.clear()
         return strokes
+    
+    def fetch_strokes(self) -> list:
+        """
+        Fetch all existing strokes in the room on startup.
+        Returns a list of stroke dicts.
+        """
+        url = f"{DB_URL}/rooms/{self.room_id}/strokes.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            if not data or not isinstance(data, dict):
+                return []
+            return list(data.values())
+        except Exception as e:
+            print(f"[Network] fetch_strokes error: {e}")
+            return []
 
     # ── Outgoing strokes ──────────────────────────────────────────────────────
 
