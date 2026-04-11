@@ -4,7 +4,213 @@ from CapstoneQuillxo.core import UserManager
 from CapstoneQuillxo.core.color import Color, Tool
 from CapstoneQuillxo.ui import ButtonManager
 from CapstoneQuillxo.ui.rgb_picker import RGBPicker
+import os
 
+
+#Begin Menu
+# 1. Initialize Pygame
+pygame.init()
+
+# 2. Setup the window
+screen_width = 900
+screen_height = 640
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("My Game Window") #
+
+
+host_button = pygame.Rect(220, 200, 450, 50)  # x, y, width, height
+join_button = pygame.Rect(220, 300, 450, 50)  # x, y, width, height
+settings_button = pygame.Rect(220, 400, 450, 50)  # x, y, width, height
+quit_button = pygame.Rect(220, 500, 450, 50)  # x, y, width, height
+
+### Host Menu Element Initialization ###
+input_box = pygame.Rect(200, 150, 200, 40)
+color_inactive = pygame.Color('gray')
+color_active = pygame.Color('dodgerblue')
+color = color_inactive
+
+font = pygame.font.Font(None, 36)
+text = ""
+
+###
+
+
+# 3. Clock to control frame rate
+clock = pygame.time.Clock()
+running = True
+
+# C. Render the frame (Drawing)
+
+
+# Initialize Sprites
+# image_path = os.path.join('assets', 'ibtc1.png')
+# image_path2 = os.path.join('assets', 'ibtc2.png')
+# character_image = pygame.image.load(image_path).convert_alpha()
+# character_image2 = pygame.image.load(image_path2).convert_alpha()
+
+def load_all_images(directory):
+    images = {}
+    for filename in os.listdir(directory):
+        if filename.endswith((".png", ".jpg", ".bmp")):
+            path = os.path.join(directory, filename)
+            # 2. Load and 3. Convert (essential for performance)
+            # Use .convert_alpha() for transparency
+            img_name = os.path.splitext(filename)[0]
+            images[img_name] = pygame.image.load(path).convert_alpha()
+    return images
+
+all_sprites = load_all_images("assets")
+
+host_menu = False
+# --- Main Game Loop ---
+while running:
+    screen.fill("purple")  # Clear screen with a background color
+    # A. Check for events (Input)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    # B. Update game state (Logic)
+    # [Insert movement, collisions, etc. here]
+            # Check for mouse click
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        if host_button.collidepoint(event.pos):
+            host_menu = True
+        if join_button.collidepoint(event.pos):
+            print("Button Clicked!") 
+        if settings_button.collidepoint(event.pos):
+            print("Button Clicked!")     
+        if quit_button.collidepoint(event.pos):
+            raise SystemExit       
+
+    ## [Draw your sprites/shapes here]
+    #pygame.draw.rect(screen, (0, 128, 255), button_rect1)
+    # pygame.draw.rect(screen, (0, 128, 255), join_button)
+    # pygame.draw.rect(screen, (0, 128, 255), settings_button)
+    # pygame.draw.rect(screen, (0, 128, 255), quit_button)
+
+    #Logo
+    logo = pygame.transform.scale(all_sprites['pARTy_Logo'], (400, 300)) #Resize to n x m
+    screen.blit(logo, ((screen_width // 2) - 200, -50))
+
+    screen.blit(all_sprites['host'], (200, 175)) # (x, y)
+    screen.blit(all_sprites['join'], (200, 275))
+    screen.blit(all_sprites['settings'], (200, 375))
+    screen.blit(all_sprites['quit'], (200, 475))
+
+    ##Images
+    #screen.blit(character_image, (100, 100))
+
+    mouse_pos = pygame.mouse.get_pos()
+    
+    if host_button.collidepoint(mouse_pos): #Host Button Monster
+        screen.blit(all_sprites['ibtc2'], (80, 160)) # (x, y)
+    else:
+        screen.blit(all_sprites['ibtc1'], (80, 160))
+
+    if join_button.collidepoint(mouse_pos): #Join Button Monster
+        screen.blit(all_sprites['chudoid2'], (680, 280)) # (x, y)
+    else:
+        screen.blit(all_sprites['chudoid1'], (680, 280))    
+
+    if settings_button.collidepoint(mouse_pos): #Settings Button Monster
+        screen.blit(all_sprites['Buster2'], (80, 380)) # (x, y)
+    else:
+        screen.blit(all_sprites['Buster1'], (80, 380))
+
+    # #TODO Quit Button Monster
+    # if quit_button.collidepoint(mouse_pos): #Quit Button Monster
+    #     screen.blit(all_sprites['ibtc2'], (80, 160)) # (x, y)
+    # else:
+    #     screen.blit(all_sprites['ibtc1'], (80, 160))           
+
+    # D. Refresh the display
+    pygame.display.flip()
+
+    # E. Limit FPS to 60
+    clock.tick(60) #
+
+    if host_menu:
+        break
+
+
+
+# 4. Clean up and close
+###HOST MENU
+# --- Host Menu Loop --- (runs after main menu, not inside it)
+active = False
+while host_menu:
+    screen.fill((30, 30, 30))
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+            host_menu = False
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                host_menu = False  # ✅ ESC goes back — you could re-enter the main loop here
+            elif active:
+                if event.key == pygame.K_RETURN:
+                    print("Entered:", text)
+                    text = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    text = text[:-1]
+                else:
+                    text += event.unicode
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if input_box.collidepoint(event.pos):
+                active = not active
+            else:
+                active = False
+            color = color_active if active else color_inactive
+
+    txt_surface = font.render(text, True, (255, 255, 255))
+    width = max(200, txt_surface.get_width() + 10)
+    input_box.w = width
+
+    screen.blit(txt_surface, (input_box.x + 5, input_box.y + 5))
+    pygame.draw.rect(screen, color, input_box, 2)
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
+#End Menu
+
+###Host Menu
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Begin Game
 pygame.init()
 
 screen = pygame.display.set_mode((900, 640))
@@ -93,6 +299,6 @@ while running:
     umanager.update(hovering_ui, events)
 
     pygame.display.flip()
-    clock.tick(60)
+    clock.tick(120)
 
 pygame.quit()
