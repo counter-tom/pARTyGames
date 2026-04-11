@@ -63,11 +63,15 @@ class UserManager:
                 if not latest.remote:
                     self.firebase.push_stroke(latest, active_user.color)
 
-        for stroke_dict in self.firebase.pop_incoming_strokes():
-            stroke = deserialize_stroke(stroke_dict)
-            if active_user is not None:
-                cmd = DrawStrokeCommand(active_user.canvas, stroke)
-                cmd.do()
+            for stroke_dict in self.firebase.pop_incoming_strokes():
+                stroke = deserialize_stroke(stroke_dict)
+                if active_user is not None:
+                    if stroke.is_clear:
+                        active_user.canvas.clear()
+                        active_user.canvas._last_pushed_stroke = None
+                    else:
+                        cmd = DrawStrokeCommand(active_user.canvas, stroke)
+                        cmd.do()
 
     def draw(self):
         active_user = self.users.get(self.active_user_id)

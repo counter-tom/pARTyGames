@@ -228,12 +228,28 @@ class FirebaseClient:
     # ── Clear ─────────────────────────────────────────────────────────────────
 
     def push_clear(self):
+    # Wipe all strokes from DB
         threading.Thread(
             target=self._fb_set,
             args=(f"rooms/{self.room_id}/strokes", {}),
             daemon=True
         ).start()
-
+        # Push a single canvas-sized white stroke as the clear signal
+        threading.Thread(
+            target=self._fb_push,
+            args=(f"rooms/{self.room_id}/strokes", self._white_stroke()),
+            daemon=True
+        ).start()
+    #This is an adhoc way to clear other users' canvasses.    
+    def _white_stroke(self) -> dict:
+        return {
+            "uid": self.user_id,
+            "color": [225, 225, 225],
+            "dots": [{"x": -500, "y": -500, "size": 2000}],
+            "ts": time.time(),
+            "is_clear": True
+        }
+    
     def _fb_set(self, path: str, data):
         url = f"{DB_URL}/{path}.json"
         try:
