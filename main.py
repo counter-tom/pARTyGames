@@ -18,6 +18,7 @@ screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("My Game Window") #
 
 
+
 host_button = pygame.Rect(220, 200, 450, 50)  # x, y, width, height
 join_button = pygame.Rect(220, 300, 450, 50)  # x, y, width, height
 settings_button = pygame.Rect(220, 400, 450, 50)  # x, y, width, height
@@ -60,121 +61,149 @@ def load_all_images(directory):
     return images
 
 all_sprites = load_all_images("assets")
-
-host_menu = False
-# --- Main Game Loop ---
-while running:
-    screen.fill("purple")  # Clear screen with a background color
-    # A. Check for events (Input)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    # B. Update game state (Logic)
-    # [Insert movement, collisions, etc. here]
-            # Check for mouse click
-    if event.type == pygame.MOUSEBUTTONDOWN:
-        if host_button.collidepoint(event.pos):
-            host_menu = True
-        if join_button.collidepoint(event.pos):
-            print("Button Clicked!") 
-        if settings_button.collidepoint(event.pos):
-            print("Button Clicked!")     
-        if quit_button.collidepoint(event.pos):
-            raise SystemExit       
-
-    ## [Draw your sprites/shapes here]
-    #pygame.draw.rect(screen, (0, 128, 255), button_rect1)
-    # pygame.draw.rect(screen, (0, 128, 255), join_button)
-    # pygame.draw.rect(screen, (0, 128, 255), settings_button)
-    # pygame.draw.rect(screen, (0, 128, 255), quit_button)
-
-    #Logo
-    logo = pygame.transform.scale(all_sprites['pARTy_Logo'], (400, 300)) #Resize to n x m
-    screen.blit(logo, ((screen_width // 2) - 200, -50))
-
-    screen.blit(all_sprites['host'], (200, 175)) # (x, y)
-    screen.blit(all_sprites['join'], (200, 275))
-    screen.blit(all_sprites['settings'], (200, 375))
-    screen.blit(all_sprites['quit'], (200, 475))
-
-    ##Images
-    #screen.blit(character_image, (100, 100))
-
-    mouse_pos = pygame.mouse.get_pos()
-    
-    if host_button.collidepoint(mouse_pos): #Host Button Monster
-        screen.blit(all_sprites['ibtc2'], (80, 160)) # (x, y)
-    else:
-        screen.blit(all_sprites['ibtc1'], (80, 160))
-
-    if join_button.collidepoint(mouse_pos): #Join Button Monster
-        screen.blit(all_sprites['chudoid2'], (680, 280)) # (x, y)
-    else:
-        screen.blit(all_sprites['chudoid1'], (680, 280))    
-
-    if settings_button.collidepoint(mouse_pos): #Settings Button Monster
-        screen.blit(all_sprites['Buster2'], (80, 380)) # (x, y)
-    else:
-        screen.blit(all_sprites['Buster1'], (80, 380))
-
-    # #TODO Quit Button Monster
-    # if quit_button.collidepoint(mouse_pos): #Quit Button Monster
-    #     screen.blit(all_sprites['ibtc2'], (80, 160)) # (x, y)
-    # else:
-    #     screen.blit(all_sprites['ibtc1'], (80, 160))           
-
-    # D. Refresh the display
-    pygame.display.flip()
-
-    # E. Limit FPS to 60
-    clock.tick(60) #
-
-    if host_menu:
-        break
-
-
-
-# 4. Clean up and close
-###HOST MENU
-# --- Host Menu Loop --- (runs after main menu, not inside it)
 active = False
-while host_menu:
-    screen.fill((30, 30, 30))
+main_menu = True
+host_menu = False
+room_name = "room1"
+# --- Main Menu Loop ---
+while main_menu:
+    while running:
+        screen.fill("purple")  # Clear screen with a background color
+        # A. Check for events (Input)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-            host_menu = False
+        # B. Update game state (Logic)
+        # [Insert movement, collisions, etc. here]
+                # Check for mouse click
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if host_button.collidepoint(event.pos):
+                host_menu = True
+            if join_button.collidepoint(event.pos):
+                print("Button Clicked!") 
+            if settings_button.collidepoint(event.pos):
+                print("Button Clicked!")     
+            if quit_button.collidepoint(event.pos):
+                raise SystemExit       
 
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                host_menu = False  # ✅ ESC goes back — you could re-enter the main loop here
-            elif active:
-                if event.key == pygame.K_RETURN:
-                    print("Entered:", text)
-                    text = ""
-                elif event.key == pygame.K_BACKSPACE:
-                    text = text[:-1]
+        ## [Draw your sprites/shapes here]
+        #pygame.draw.rect(screen, (0, 128, 255), button_rect1)
+        # pygame.draw.rect(screen, (0, 128, 255), join_button)
+        # pygame.draw.rect(screen, (0, 128, 255), settings_button)
+        # pygame.draw.rect(screen, (0, 128, 255), quit_button)
+
+        #Logo
+        logo = pygame.transform.scale(all_sprites['pARTy_Logo'], (400, 300)) #Resize to n x m
+        screen.blit(logo, ((screen_width // 2) - 200, -50))
+
+        screen.blit(all_sprites['host'], (200, 175)) # (x, y)
+        screen.blit(all_sprites['join'], (200, 275))
+        screen.blit(all_sprites['settings'], (200, 375))
+        screen.blit(all_sprites['quit'], (200, 475))
+
+        ##Images
+        #screen.blit(character_image, (100, 100))
+
+        mouse_pos = pygame.mouse.get_pos()
+        
+        if host_button.collidepoint(mouse_pos): #Host Button Monster
+            screen.blit(all_sprites['ibtc2'], (80, 160)) # (x, y)
+        else:
+            screen.blit(all_sprites['ibtc1'], (80, 160))
+
+        if join_button.collidepoint(mouse_pos): #Join Button Monster
+            screen.blit(all_sprites['chudoid2'], (680, 280)) # (x, y)
+        else:
+            screen.blit(all_sprites['chudoid1'], (680, 280))    
+
+        if settings_button.collidepoint(mouse_pos): #Settings Button Monster
+            screen.blit(all_sprites['Buster2'], (80, 380)) # (x, y)
+        else:
+            screen.blit(all_sprites['Buster1'], (80, 380))
+
+        # #TODO Quit Button Monster
+        # if quit_button.collidepoint(mouse_pos): #Quit Button Monster
+        #     screen.blit(all_sprites['ibtc2'], (80, 160)) # (x, y)
+        # else:
+        #     screen.blit(all_sprites['ibtc1'], (80, 160))           
+
+        # D. Refresh the display
+        pygame.display.flip()
+
+        # E. Limit FPS to 60
+        clock.tick(60) #
+
+        if host_menu:
+            break
+
+    
+    
+    # 4. Clean up and close
+    ###HOST MENU
+    # --- Host Menu Loop --- (runs after main menu, not inside it)
+    
+    while host_menu:
+        screen.fill((232, 105, 186))
+
+        arrow_button = pygame.Rect(10, 10, 125, 125)  # ✅ Move outside loop eventually, but fine here
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                host_menu = False
+
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    host_menu = False
+                elif active:
+                    if event.key == pygame.K_RETURN:
+                        room_name = text   # ✅ FIX: capture BEFORE clearing
+                        print("Entered:", room_name)
+                        text = ""
+                    elif event.key == pygame.K_BACKSPACE:
+                        text = text[:-1]
+                    else:
+                        text += event.unicode
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if input_box.collidepoint(event.pos):
+                    active = not active
                 else:
-                    text += event.unicode
+                    active = False
+                color = color_active if active else color_inactive
 
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if input_box.collidepoint(event.pos):
-                active = not active
-            else:
-                active = False
-            color = color_active if active else color_inactive
+                if arrow_button.collidepoint(event.pos):  # ✅ FIX: inside event loop
+                    host_menu = False
 
-    txt_surface = font.render(text, True, (255, 255, 255))
-    width = max(200, txt_surface.get_width() + 10)
-    input_box.w = width
+        ##Drawings
+        mouse_pos = pygame.mouse.get_pos()
 
-    screen.blit(txt_surface, (input_box.x + 5, input_box.y + 5))
-    pygame.draw.rect(screen, color, input_box, 2)
+        # Arrow button
+        if arrow_button.collidepoint(mouse_pos):
+            big_arrow = pygame.transform.scale(all_sprites['arrow'], (120, 120))
+            screen.blit(big_arrow, (10, 10))
+        else:
+            screen.blit(all_sprites['arrow'], (20, 20))
 
-    pygame.display.flip()
-    clock.tick(60)
+        # ✅ "Room Name:" label above the input box
+        label_surface = font.render("Room Name:", True, (255, 255, 255))
+        screen.blit(label_surface, (input_box.x, input_box.y - 35))
+
+        # Input box with live typing
+        txt_surface = font.render(text, True, (255, 255, 255))
+        width = max(200, txt_surface.get_width() + 10)
+        input_box.w = width
+        screen.blit(txt_surface, (input_box.x + 5, input_box.y + 5))
+        pygame.draw.rect(screen, color, input_box, 2)
+
+        # ✅ Display confirmed room name below the box
+        if room_name:
+            confirmed_surface = font.render(f"Room: {room_name}", True, (255, 255, 0))
+            screen.blit(confirmed_surface, (input_box.x, input_box.y + 55))
+
+        pygame.display.flip()
+        clock.tick(60)
 
 pygame.quit()
 #End Menu
