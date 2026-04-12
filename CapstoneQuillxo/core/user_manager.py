@@ -9,13 +9,13 @@ from CapstoneQuillxo.commands import DrawStrokeCommand
 from CapstoneQuillxo.commands.clear_canvas_command import ClearCanvasCommand
 
 class UserManager:
-    def __init__(self):
+    def __init__(self, room_name):
         self.users = {}
         self._next_id = 0
         self.master = MasterCanvas()
         self.active_user_id = 0
-
-        self.firebase = FirebaseClient(room_id="room1", user_id=str(uuid.uuid4())[:8])
+        self.room_name = room_name
+        self.firebase = FirebaseClient(room_id=self.room_name, user_id=str(uuid.uuid4())[:8])
         self.firebase.connect()
         self.firebase.start_listener()
         self._pending_initial_strokes = self.firebase.fetch_strokes()
