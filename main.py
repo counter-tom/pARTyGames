@@ -72,7 +72,7 @@ while running:
         active_user.color = rgb_picker.get_color()
         active_user.cursor.color = active_user.color
 
-    hovering_ui = top_buttons.is_hovering_ui or menu_button_rect.collidepoint(pygame.mouse.get_pos())
+    hovering_ui = top_buttons.is_hovering_ui or menu_button_rect.collidepoint(pygame.mouse.get_pos()) or all_button_rect.collidepoint(pygame.mouse.get_pos ())
     if menu_open:
         hovering_ui = hovering_ui or tool_buttons.is_hovering_ui or rgb_picker.is_hovering()
 
