@@ -1,5 +1,5 @@
 import pygame
-from CapstoneQuillxo.core.color import Color
+from core.color import Color
 
 
 class RGBPicker:

@@ -6,8 +6,8 @@ objects so they can be applied to a PaintCanvas via DrawStrokeCommand.
 """
 
 import pygame
-from CapstoneQuillxo.drawing.paint_dot import PaintDot
-from CapstoneQuillxo.drawing.stroke import Stroke
+from drawing.paint_dot import PaintDot
+from drawing.stroke import Stroke
 
 
 class _RawColor:

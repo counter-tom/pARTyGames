@@ -1,12 +1,12 @@
 import uuid
 import pygame
-from CapstoneQuillxo.core.user import User
-from CapstoneQuillxo.core.color import Color
-from CapstoneQuillxo.canvas.master_canvas import MasterCanvas
-from CapstoneQuillxo.network import FirebaseClient
-from CapstoneQuillxo.network.stroke_deserializer import deserialize_stroke
-from CapstoneQuillxo.commands import DrawStrokeCommand
-from CapstoneQuillxo.commands.clear_canvas_command import ClearCanvasCommand
+from core.user import User
+from core.color import Color
+from canvas.master_canvas import MasterCanvas
+from network import FirebaseClient
+from network.stroke_deserializer import deserialize_stroke
+from commands import DrawStrokeCommand
+from commands.clear_canvas_command import ClearCanvasCommand
 
 class UserManager:
     def __init__(self, room_name):

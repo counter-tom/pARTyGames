@@ -1,5 +1,5 @@
 import pygame
-from CapstoneQuillxo.core import Color
+from core import Color
 
 class MasterCanvas:
     def __init__(self):

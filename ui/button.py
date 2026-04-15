@@ -1,5 +1,5 @@
 import pygame
-from CapstoneQuillxo.core import Color
+from core import Color
  
 class Button:
     def __init__(self, text, coords, action, screen, font):

@@ -2,11 +2,11 @@ import math
 import random
 import pygame
 
-from CapstoneQuillxo.commands.draw_stroke_command import DrawStrokeCommand
-from CapstoneQuillxo.commands.fill_command import FillCommand
-from CapstoneQuillxo.core.color import Tool
-from CapstoneQuillxo.drawing.paint_dot import PaintDot
-from CapstoneQuillxo.drawing.stroke import Stroke
+from commands.draw_stroke_command import DrawStrokeCommand
+from commands.fill_command import FillCommand
+from core.color import Tool
+from drawing.paint_dot import PaintDot
+from drawing.stroke import Stroke
 
 
 class Cursor:

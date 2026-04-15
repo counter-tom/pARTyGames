@@ -1,6 +1,6 @@
 import pygame
-from CapstoneQuillxo.core.color import Color
-from CapstoneQuillxo.canvas.drawing_memento import DrawingMemento
+from core.color import Color
+from canvas.drawing_memento import DrawingMemento
 
 
 class PaintCanvas:

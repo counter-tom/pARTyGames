@@ -1,6 +1,6 @@
 import pygame
 import pytest
-from CapstoneQuillxo.canvas import PaintCanvas, MasterCanvas
+from canvas import PaintCanvas, MasterCanvas
 
 @pytest.fixture(autouse=True)
 def pygame_init():

@@ -1,5 +1,5 @@
 import pygame
-from CapstoneQuillxo.ui.button import Button
+from ui.button import Button
 
 class ButtonManager:
     def __init__(self, screen):

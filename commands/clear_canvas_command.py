@@ -1,4 +1,4 @@
-from CapstoneQuillxo.commands.command import Command
+from commands.command import Command
 
 
 class ClearCanvasCommand:

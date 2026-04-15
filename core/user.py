@@ -1,6 +1,6 @@
-from CapstoneQuillxo.canvas import PaintCanvas
-from CapstoneQuillxo.drawing import Cursor
-from CapstoneQuillxo.commands import CommandManager
+from canvas import PaintCanvas
+from drawing import Cursor
+from commands import CommandManager
 
 
 class User:

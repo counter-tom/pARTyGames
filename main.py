@@ -1,10 +1,10 @@
 import pygame
-from CapstoneQuillxo.commands import ClearCanvasCommand
-from CapstoneQuillxo.core import UserManager
-from CapstoneQuillxo.core.color import Color, Tool
-from CapstoneQuillxo.ui import ButtonManager
-from CapstoneQuillxo.ui.rgb_picker import RGBPicker
-from CapstoneQuillxo.menu.menu_system import menu_start
+from commands import ClearCanvasCommand
+from core import UserManager
+from core.color import Color, Tool
+from ui import ButtonManager
+from ui.rgb_picker import RGBPicker
+from menu.menu_system import menu_start
 #import os
 
 
@@ -17,7 +17,7 @@ print(room_name)
 pygame.init()
 
 screen = pygame.display.set_mode((900, 640))
-pygame.display.set_caption("CapstoneQuillxo")
+pygame.display.set_caption("pARTyGames")
 font = pygame.font.Font("freesansbold.ttf", 18)
 
 umanager = UserManager(room_name)
