@@ -1,5 +1,7 @@
 .env
 __pycache__/
+**/__pycache__/
+*.pyc
 deploy_config.ps1
 deploy.ps1
 *.egg-info/
