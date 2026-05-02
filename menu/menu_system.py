@@ -20,6 +20,8 @@ ASSET_FILES = [
     "speechbutton1",
     "speechbutton2",
     "start",
+    "confuzo1",
+    "confuzo2",
 ]
 
 # Replaces os.listdir — loads each asset explicitly by name
@@ -182,7 +184,10 @@ async def menu_start_async() -> list:
                 sprite = all_sprites['Buster2'] if settings_button.collidepoint(mouse_pos) else all_sprites['Buster1']
                 screen.blit(sprite, (80, 380))
 
-            # #TODO Quit Button Monster
+            #Quit Button Monster
+            if 'confuzo1' in all_sprites and 'confuzo2' in all_sprites:
+                sprite = all_sprites['confuzo2'] if quit_button.collidepoint(mouse_pos) else all_sprites['confuzo1']
+                screen.blit(sprite, (680, 500))
 
         elif state in (STATE_HOST, STATE_JOIN):
             screen.fill((232, 105, 186))

@@ -1,68 +1,55 @@
+
 """
 Multiplayer Drawing App — Firebase REST API + Pygame
 =====================================================
 Compatible with Python 3.13+ (no pyrebase dependency)
 
-Browser-compatible version:
-    Replaces requests/threading/sseclient with browser JS calls via
-    the `js` module (pyodide) when running in the browser.
-    Falls back to the original desktop implementation otherwise.
-    The DB_URL is injected by index.html into window.FIREBASE_DB_URL
-    before Pygbag starts, so no .env file is needed in the browser.
-
-Desktop requirements:
+Requirements:
     pip install pygame requests sseclient-py
     pip install python-dotenv
 
 Setup:
-    1. For desktop: FIREBASE_DATABASE_URL in your .env file
-    2. For web: Firebase config in index.html
-    3. Run on multiple machines with the same ROOM_ID
+    1. Fill in FIREBASE_CONFIG below
+    2. Run on multiple machines with the same ROOM_ID
 """
 
+import pygame
+import requests
+import threading
+import time
+import uuid
 import sys
 import json
-import time
 
-# True when running inside the browser via pygbag/WebAssembly
-IS_WEB = sys.platform == "emscripten"
+import os 
+from dotenv import load_dotenv
 
-if not IS_WEB:
-    # ── Desktop fallback (original implementation) ────────────────────────────
-    import threading
-    import os
-    from dotenv import load_dotenv
 
-    try:
-        import requests
-    except ImportError:
-        requests = None
+try:
+    import sseclient
+    HAS_SSE = True
+except ImportError:
+    HAS_SSE = False
+    print("[Network] sseclient-py not installed. Live sync unavailable.")
+    print("  pip install sseclient-py")
 
-    try:
-        import sseclient
-        HAS_SSE = True
-    except ImportError:
-        HAS_SSE = False
-        print("[Network] sseclient-py not installed. Live sync unavailable.")
-        print("  pip install sseclient-py")
 
-    load_dotenv()
-    FIREBASE_CONFIG = {
-        "databaseURL": os.getenv("FIREBASE_DATABASE_URL")
-    }
-    print(FIREBASE_CONFIG["databaseURL"])
-    print(os.getenv("FIREBASE_DATABASE_URL"))
-    DB_URL = FIREBASE_CONFIG["databaseURL"]
+load_dotenv()
 
-else:
-    # ── Browser: grab the URL that index.html injected ────────────────────────
-    import js
-    DB_URL = str(js.window.FIREBASE_DB_URL)
+
+FIREBASE_CONFIG = {
+    "databaseURL": os.getenv("FIREBASE_DATABASE_URL")
+}
+
+print ( FIREBASE_CONFIG["databaseURL"] ) 
+print ( os.getenv("FIREBASE_DATABASE_URL") )
+
+DB_URL = FIREBASE_CONFIG["databaseURL"]
 
 
 class FirebaseClient:
     """
-    Wraps Firebase calls for stroke push, stream, and clear.
+    Wraps Firebase REST API calls for stroke push, stream, and clear.
 
     Strokes are sent as:
     {
@@ -75,9 +62,6 @@ class FirebaseClient:
     The dot format maps directly to PaintDot — x/y are the top-left
     surface position and size is the surface dimension. Color is shared
     across all dots in a stroke since PaintDot owns its color.
-
-    On desktop: uses requests + sseclient (original behavior).
-    In browser: uses Firebase JS SDK via the js/pyodide bridge.
     """
 
     SEND_INTERVAL = 0.2  # seconds — matches PaintCanvas.SYNC_INTERVAL
@@ -87,11 +71,9 @@ class FirebaseClient:
         self.user_id = user_id
         self._last_send = 0.0
         self._incoming = []
-
-        if not IS_WEB:
-            import threading
-            self._lock = threading.Lock()
-            self._listener_thread = None
+        self._lock = threading.Lock()
+        self._listener_thread = None
+        self._incoming_messages = []  
 
     # ── Connection ────────────────────────────────────────────────────────────
 
@@ -100,117 +82,130 @@ class FirebaseClient:
         Test connectivity to Firebase. Returns True if reachable.
         Should be called once before starting the listener.
         """
-        if IS_WEB:
-            # Connection is handled by Firebase JS SDK in index.html
-            print(f"[Network] Web mode — room: {self.room_id}")
-            return True
-        else:
-            import requests as req
-            url = f"{DB_URL}/rooms/{self.room_id}.json"
-            try:
-                r = req.get(url, timeout=5)
-                if r.status_code == 200:
-                    print(f"[Network] Connected to room: {self.room_id}")
-                    return True
-                else:
-                    print(f"[Network] Firebase returned status {r.status_code}")
-                    return False
-            except Exception as e:
-                print(f"[Network] Could not reach Firebase: {e}")
+        url = f"{DB_URL}/rooms/{self.room_id}.json"
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                print(f"[Network] Connected to room: {self.room_id}")
+                return True
+            else:
+                print(f"[Network] Firebase returned status {response.status_code}")
                 return False
+        except Exception as e:
+            print(f"[Network] Could not reach Firebase: {e}")
+            return False
 
     # ── Listener ──────────────────────────────────────────────────────────────
 
     def start_listener(self):
         """
-        Start listening for incoming strokes from other users.
-        On desktop: background daemon thread via SSE.
-        In browser: Firebase JS realtime listener.
-        Silently does nothing if sseclient-py is not installed on desktop.
+        Start a background daemon thread that listens for incoming strokes
+        from other users via Firebase Server-Sent Events.
+        Silently does nothing if sseclient-py is not installed.
         """
-        if IS_WEB:
-            # Set up Firebase JS realtime listener
-            # index.html exposes window.firebaseDB
-            try:
-                path = f"rooms/{self.room_id}/strokes"
-                uid = self.user_id
-                incoming_ref = js.window.firebaseDB.ref(path)
-
-                # Store reference so we can remove it later if needed
-                self._js_listener = incoming_ref
-
-                def on_value(snapshot):
-                    try:
-                        val = snapshot.val()
-                        if val is None:
-                            return
-                        data = json.loads(js.JSON.stringify(val))
-                        if isinstance(data, dict):
-                            for stroke in data.values():
-                                if isinstance(stroke, dict) and stroke.get("uid") != uid:
-                                    self._incoming.append(stroke)
-                    except Exception as e:
-                        print(f"[Network] Listener error: {e}")
-
-                incoming_ref.on("value", js.create_proxy(on_value))
-            except Exception as e:
-                print(f"[Network] Could not start JS listener: {e}")
-        else:
-            if not HAS_SSE:
-                return
-            import threading
-            self._listener_thread = threading.Thread(
-                target=self._stream_loop, daemon=True
-            )
-            self._listener_thread.start()
-
-    # ── Desktop-only stream loop ──────────────────────────────────────────────
+        if not HAS_SSE:
+            return
+        self._listener_thread = threading.Thread(
+            target=self._stream_loop,
+            daemon=True
+        )
+        self._listener_thread.start()
 
     def _stream_loop(self):
         """Internal — runs in daemon thread, reconnects on failure."""
-        import requests as req
-        import sseclient as sse
-        path = f"rooms/{self.room_id}/strokes"
+        path = f"rooms/{self.room_id}"
         url = f"{DB_URL}/{path}.json"
         headers = {"Accept": "text/event-stream"}
+
         while True:
             try:
-                response = req.get(url, headers=headers, stream=True, timeout=None)
-                client = sse.SSEClient(response)
+                response = requests.get(
+                    url, headers=headers, stream=True, timeout=None
+                )
+                client = sseclient.SSEClient(response)
                 for event in client.events():
                     if event.event in ("put", "patch") and event.data:
                         self._handle_event(event.data)
             except Exception as e:
-                import time as t
                 print(f"[Network] Stream error: {e}. Reconnecting in 3s...")
-                t.sleep(3)
+                time.sleep(3)
 
     def _handle_event(self, raw: str):
-        """Parse an SSE payload and queue any foreign strokes."""
         try:
             payload = json.loads(raw)
+            path = payload.get("path", "")
             data = payload.get("data")
             if not data:
                 return
-            if isinstance(data, dict):
-                # Single stroke or dict of strokes
-                if "dots" in data:
-                    self._queue_if_foreign(data)
-                else:
-                    for stroke in data.values():
-                        if isinstance(stroke, dict):
-                            self._queue_if_foreign(stroke)
+
+            if "chat" in path:
+                if isinstance(data, dict):
+                    if "message" in data:
+                        self._queue_message_if_foreign(data)
+                    else:
+                        for msg in data.values():
+                            if isinstance(msg, dict):
+                                self._queue_message_if_foreign(msg)
+
+            elif "strokes" in path:  # ✅ Only process strokes if path says strokes
+                if isinstance(data, dict):
+                    if "dots" in data:
+                        self._queue_if_foreign(data)
+                    else:
+                        for stroke in data.values():
+                            if isinstance(stroke, dict):
+                                self._queue_if_foreign(stroke)
+
         except Exception:
             pass
 
     def _queue_if_foreign(self, stroke: dict):
         """Only queue strokes from other users."""
         if stroke.get("uid") != self.user_id:
-            if IS_WEB:
+            with self._lock:
                 self._incoming.append(stroke)
-            else:
-                with self._lock:
-                    self._incoming.append(stroke)
+
+    ##Heartbeat implementation to check active players.
+    HEARTBEAT_INTERVAL = 5   # seconds
+    PRESENCE_TIMEOUT   = 15  # seconds
+
+    def start_heartbeat(self):
+        threading.Thread(target=self._heartbeat_loop, daemon=True).start()
+
+    def _heartbeat_loop(self):
+        while True:
+            self._fb_set(
+                f"rooms/{self.room_id}/presence/{self.user_id}",
+                {"uid": self.user_id, "ts": time.time()}
+            )
+            time.sleep(self.HEARTBEAT_INTERVAL)
+
+    def fetch_active_players(self) -> list:
+        url = f"{DB_URL}/rooms/{self.room_id}/presence.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            if not data or not isinstance(data, dict):
+                return []
+            now = time.time()
+            return [
+                entry["uid"] for entry in data.values()
+                if now - entry.get("ts", 0) < self.PRESENCE_TIMEOUT
+            ]
+        except Exception as e:
+            print(f"[Network] fetch_active_players error: {e}")
+            return []
+
+    def leave_room(self):
+        self._fb_delete(f"rooms/{self.room_id}/presence/{self.user_id}")
+
+    def clear_room(self):
+        threading.Thread(
+            target=self._fb_set,
+            args=(f"rooms/{self.room_id}", {}),
+            daemon=False  # ✅ Must complete before process dies
+        ).start()
+
 
     # ── Incoming strokes ──────────────────────────────────────────────────────
 
@@ -222,49 +217,26 @@ class FirebaseClient:
         Returns a list of stroke dicts:
         [{"uid": str, "color": [r,g,b], "dots": [{"x","y","size"}], "ts": float}]
         """
-        if IS_WEB:
+        with self._lock:
             strokes = list(self._incoming)
             self._incoming.clear()
-            return strokes
-        else:
-            with self._lock:
-                strokes = list(self._incoming)
-                self._incoming.clear()
-            return strokes
-
+        return strokes
+    
     def fetch_strokes(self) -> list:
         """
         Fetch all existing strokes in the room on startup.
         Returns a list of stroke dicts.
-        On desktop: REST GET request.
-        In browser: reads window.INITIAL_STROKES set by index.html.
         """
-        if IS_WEB:
-            # Initial strokes are loaded via JS in index.html
-            # window.INITIAL_STROKES is set before Pygbag starts
-            try:
-                raw = js.window.INITIAL_STROKES
-                if raw is None:
-                    return []
-                data = json.loads(js.JSON.stringify(raw))
-                if isinstance(data, dict):
-                    return list(data.values())
+        url = f"{DB_URL}/rooms/{self.room_id}/strokes.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            if not data or not isinstance(data, dict):
                 return []
-            except Exception as e:
-                print(f"[Network] fetch_strokes error: {e}")
-                return []
-        else:
-            import requests as req
-            url = f"{DB_URL}/rooms/{self.room_id}/strokes.json"
-            try:
-                r = req.get(url, timeout=5)
-                data = r.json()
-                if not data or not isinstance(data, dict):
-                    return []
-                return list(data.values())
-            except Exception as e:
-                print(f"[Network] fetch_strokes error: {e}")
-                return []
+            return list(data.values())
+        except Exception as e:
+            print(f"[Network] fetch_strokes error: {e}")
+            return []
 
     # ── Outgoing strokes ──────────────────────────────────────────────────────
 
@@ -282,17 +254,13 @@ class FirebaseClient:
         if now - self._last_send < self.SEND_INTERVAL:
             return
         self._last_send = now
-        data = self._serialize_stroke(stroke, color)
 
-        if IS_WEB:
-            self._js_push(f"rooms/{self.room_id}/strokes", data)
-        else:
-            import threading
-            threading.Thread(
-                target=self._fb_push,
-                args=(f"rooms/{self.room_id}/strokes", data),
-                daemon=True
-            ).start()
+        data = self._serialize_stroke(stroke, color)
+        threading.Thread(
+            target=self._fb_push,
+            args=(f"rooms/{self.room_id}/strokes", data),
+            daemon=True
+        ).start()
 
     def _serialize_stroke(self, stroke, color) -> dict:
         # Normalize color to [r, g, b] regardless of type
@@ -300,6 +268,7 @@ class FirebaseClient:
             rgb = list(color.value)
         else:
             rgb = list(color)
+        
         dots = [
             {"x": dot.x, "y": dot.y, "size": dot.surf.get_width()}
             for dot in stroke.dots
@@ -313,20 +282,92 @@ class FirebaseClient:
 
     # ── Clear ─────────────────────────────────────────────────────────────────
 
-    def push_clear(self):
-        # Wipe all strokes from DB
-        path = f"rooms/{self.room_id}/strokes"
-        if IS_WEB:
-            self._js_set(path, {})
-            # Push a single canvas-sized white stroke as the clear signal
-            self._js_push(path, self._white_stroke())
-        else:
-            import threading
-            threading.Thread(target=self._fb_set, args=(path, {}), daemon=True).start()
-            # Push a single canvas-sized white stroke as the clear signal
-            threading.Thread(target=self._fb_push, args=(path, self._white_stroke()), daemon=True).start()
+    # Chat functions
+    def push_chat_message(self, message: str):
+        """Push a chat message to Firebase."""
+        data = {
+            "uid": self.user_id,
+            "message": message,
+            "ts": time.time()
+        }
+        threading.Thread(
+            target=self._fb_push,
+            args=(f"rooms/{self.room_id}/chat", data),
+            daemon=True
+        ).start()
 
-    # This is an adhoc way to clear other users' canvases.
+    def fetch_chat_messages(self) -> list:
+        """Fetch all existing chat messages on startup."""
+        url = f"{DB_URL}/rooms/{self.room_id}/chat.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            if not data or not isinstance(data, dict):
+                return []
+            return sorted(data.values(), key=lambda m: m.get("ts", 0))  
+        except Exception as e:
+            print(f"[Network] fetch_chat_messages error: {e}")
+            return []
+
+    def pop_incoming_messages(self) -> list:
+        """Return and clear all queued incoming chat messages."""
+        with self._lock:
+            messages = list(self._incoming_messages)
+            self._incoming_messages.clear()
+        return messages
+    
+#########################
+    # def _handle_event(self, raw: str):
+    #     """Parse an SSE payload and queue any foreign strokes or messages."""
+    #     try:
+    #         payload = json.loads(raw)
+    #         path = payload.get("path", "")
+    #         data = payload.get("data")
+    #         if not data:
+    #             return
+
+    #         if "chat" in path:
+    #             if isinstance(data, dict):
+    #                 if "message" in data:
+    #                     self._queue_message_if_foreign(data)
+    #                 else:
+    #                     for msg in data.values():
+    #                         if isinstance(msg, dict):
+    #                             self._queue_message_if_foreign(msg)
+    #         else:
+    #             if isinstance(data, dict):
+    #                 if "dots" in data:
+    #                     self._queue_if_foreign(data)
+    #                 else:
+    #                     for stroke in data.values():
+    #                         if isinstance(stroke, dict):
+    #                             self._queue_if_foreign(stroke)
+    #     except Exception:
+    #         pass
+
+    def _queue_message_if_foreign(self, msg: dict):
+        """Queue chat messages from other users."""
+        if msg.get("uid") != self.user_id:
+            with self._lock:
+                self._incoming_messages.append(msg)    
+
+
+#########################
+
+    def push_clear(self):
+    # Wipe all strokes from DB
+        threading.Thread(
+            target=self._fb_set,
+            args=(f"rooms/{self.room_id}/strokes", {}),
+            daemon=True
+        ).start()
+        # Push a single canvas-sized white stroke as the clear signal
+        threading.Thread(
+            target=self._fb_push,
+            args=(f"rooms/{self.room_id}/strokes", self._white_stroke()),
+            daemon=True
+        ).start()
+    #This is an adhoc way to clear other users' canvasses.    
     def _white_stroke(self) -> dict:
         return {
             "uid": self.user_id,
@@ -335,45 +376,26 @@ class FirebaseClient:
             "ts": time.time(),
             "is_clear": True
         }
-
-    # ── JS Firebase calls (web only) ──────────────────────────────────────────
-
-    def _js_push(self, path: str, data: dict):
-        try:
-            ref = js.window.firebaseDB.ref(path)
-            ref.push(js.JSON.parse(json.dumps(data)))
-        except Exception as e:
-            print(f"[Network] JS push error: {e}")
-
-    def _js_set(self, path: str, data: dict):
-        try:
-            ref = js.window.firebaseDB.ref(path)
-            ref.set(js.JSON.parse(json.dumps(data)))
-        except Exception as e:
-            print(f"[Network] JS set error: {e}")
-
-    # ── Firebase REST (desktop only) ──────────────────────────────────────────
-
-    def _fb_push(self, path: str, data: dict):
-        import requests as req
+    
+    def _fb_set(self, path: str, data):
         url = f"{DB_URL}/{path}.json"
         try:
-            req.post(url, json=data, timeout=5)
+            requests.put(url, json=data, timeout=5)
+        except Exception as e:
+            print(f"[Network] Set error: {e}")        
+
+    # ── Firebase REST ─────────────────────────────────────────────────────────
+
+    def _fb_push(self, path: str, data: dict):
+        url = f"{DB_URL}/{path}.json"
+        try:
+            requests.post(url, json=data, timeout=5)
         except Exception as e:
             print(f"[Network] Push error: {e}")
 
-    def _fb_set(self, path: str, data):
-        import requests as req
-        url = f"{DB_URL}/{path}.json"
-        try:
-            req.put(url, json=data, timeout=5)
-        except Exception as e:
-            print(f"[Network] Set error: {e}")
-
     def _fb_delete(self, path: str):
-        import requests as req
         url = f"{DB_URL}/{path}.json"
         try:
-            req.delete(url, timeout=5)
+            requests.delete(url, timeout=5)
         except Exception as e:
             print(f"[Network] Delete error: {e}")
