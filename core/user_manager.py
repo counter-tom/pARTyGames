@@ -220,6 +220,9 @@ class UserManager:
     def _end_round_async(self, next_turn_index: int):
         self.firebase.push_game_state(next_turn_index, "", "")
         self.firebase.end_round()
+        self.firebase.push_clear()
+        self.get_clear_command()
+        
 
     def is_input_locked(self) -> bool:
         """Uses cached players — no network call."""
