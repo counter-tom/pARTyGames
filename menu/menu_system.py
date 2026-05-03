@@ -69,6 +69,20 @@ def fetch_rooms() -> list:  # returns list of (room_id, gamemode) tuples
         return []
 
 
+def check_room_exists(room_id: str) -> bool:
+    """Returns True if the room already exists in Firebase."""
+    if not DB_URL:
+        return False
+    try:
+        url = f"{DB_URL}/rooms/{room_id}.json?shallow=true"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        return data is not None and data != {}
+    except Exception as e:
+        print(f"[Menu] check_room_exists error: {e}")
+        return False
+
+
 # ── Gamemode options ───────────────────────────────────────────────────────────
 GAMEMODES = ["freedraw", "pictionary"]
 
@@ -116,6 +130,8 @@ async def menu_start_async() -> list:
     text           = ""
     active         = False
     room_name      = "room1"
+
+    host_error_msg = ""  # ✅ Shown when room already exists
 
     # ── Gamemode dropdown (HOST only) ─────────────────────────────────────────
     selected_gamemode_index = 0
@@ -198,6 +214,7 @@ async def menu_start_async() -> list:
                         else:
                             text += event.unicode
                             room_name = text
+                            host_error_msg = ""  # ✅ Clear error on new input
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if dropdown_rect.collidepoint(event.pos):
@@ -227,9 +244,12 @@ async def menu_start_async() -> list:
                         dropdown_open = False
 
                     if start_button.collidepoint(event.pos):
-                        menu_session_info[0] = room_name
-                        menu_session_info[1] = GAMEMODES[selected_gamemode_index]
-                        done = True
+                        if check_room_exists(room_name):
+                            host_error_msg = "Error — Room already exists!"  # ✅ Show error
+                        else:
+                            menu_session_info[0] = room_name
+                            menu_session_info[1] = GAMEMODES[selected_gamemode_index]
+                            done = True
 
             # ── Join menu ─────────────────────────────────────────────────────
             elif state == STATE_JOIN:
@@ -324,6 +344,11 @@ async def menu_start_async() -> list:
             if room_name:
                 screen.blit(font.render(f"Room: {room_name}", True, (255, 255, 255)),
                             (screen_width // 2 - 100, screen_height // 2 - 200))
+
+            if host_error_msg:
+                err_surface = small_font.render(host_error_msg, True, (255, 80, 80))
+                screen.blit(err_surface, (screen_width // 2 - err_surface.get_width() // 2,
+                                          screen_height // 2 + 70))
 
             pygame.draw.rect(screen, (255, 255, 255), dropdown_rect)
             pygame.draw.rect(screen, (0, 0, 0),       dropdown_rect, 2)
