@@ -30,67 +30,80 @@ def load_all_images():
     for name in ASSET_FILES:
         path = f"assets/{name}.png"
         try:
-            # Load and convert (essential for performance)
-            # Use convert_alpha() for transparency
             images[name] = pygame.image.load(path).convert_alpha()
         except Exception as e:
             print(f"[Assets] Could not load {path}: {e}")
     return images
 
 
-# Begin Menu
-# 1. Initialize Pygame
+# ── Gamemode options ───────────────────────────────────────────────────────────
+GAMEMODES = ["freedraw", "pictionary"]
+
+
 async def menu_start_async() -> list:
     """
     Async version of menu_start for pygbag/browser.
-    Returns [room_name].
+    Returns [room_name, gamemode].
+      - Host sets gamemode via dropdown.
+      - Join returns gamemode="fetch" so main.py reads it from Firebase.
     """
     import asyncio
     pygame.init()
-    menu_session_info = []
-    menu_session_info.insert(0, "room1")
+
+    # menu_session_info[0] = room_name, menu_session_info[1] = gamemode
+    menu_session_info = ["room1", "freedraw"]
 
     # 2. Setup the window
-    screen_width = 900
+    screen_width  = 900
     screen_height = 640
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption("pARTy")
 
-    host_button     = pygame.Rect(220, 200, 450, 50)  # x, y, width, height
-    join_button     = pygame.Rect(220, 300, 450, 50)  # x, y, width, height
-    settings_button = pygame.Rect(220, 400, 450, 50)  # x, y, width, height
-    quit_button     = pygame.Rect(220, 500, 450, 50)  # x, y, width, height
+    # ── Shared button rects (main menu) ───────────────────────────────────────
+    host_button     = pygame.Rect(220, 200, 450, 50)
+    join_button     = pygame.Rect(220, 300, 450, 50)
+    settings_button = pygame.Rect(220, 400, 450, 50)
+    quit_button     = pygame.Rect(220, 500, 450, 50)
 
-    ### Host Menu Element Initialization ###
-    input_box      = pygame.Rect(screen_width // 2 - 120, screen_height // 2 - 150, 200, 40)
+    # ── Shared sub-menu rects ─────────────────────────────────────────────────
+    arrow_button = pygame.Rect(10, 10, 125, 125)
+    start_button = pygame.Rect(screen_width // 2 - 250, screen_height // 2 + 100, 500, 150)
+    input_box    = pygame.Rect(screen_width // 2 - 120, screen_height // 2 - 150, 200, 40)
+
+    # ── Input state ───────────────────────────────────────────────────────────
     color_inactive = pygame.Color('gray')
     color_active   = pygame.Color('dodgerblue')
     input_color    = color_inactive
+    font           = pygame.font.Font(None, 36)
+    text           = ""
+    active         = False
+    room_name      = "room1"
 
-    font      = pygame.font.Font(None, 36)
-    text      = ""
-    active    = False
-    room_name = "room1"
-    ###
+    # ── Gamemode dropdown (HOST only) ─────────────────────────────────────────
+    selected_gamemode_index = 0
+    dropdown_open  = False
+    dropdown_rect  = pygame.Rect(screen_width // 2 - 120, screen_height // 2 - 50, 200, 40)
+    dropdown_options = [
+        pygame.Rect(screen_width // 2 - 120, screen_height // 2 - 50 + 40 * (i + 1), 200, 40)
+        for i in range(len(GAMEMODES))
+    ]
 
-    # 3. Clock to control frame rate
-    clock = pygame.time.Clock()
-
-    # Initialize Sprites
-    all_sprites = load_all_images()
-
-    # ── States ────────────────────────────────────────────────────────────────
+    # ── State machine ─────────────────────────────────────────────────────────
     STATE_MAIN = "main"
     STATE_HOST = "host"
     STATE_JOIN = "join"
     state = STATE_MAIN
     done  = False
 
-    # --- Main Menu Loop ---
-    while not done:
-        # A. Check for events (Input)
-        events = pygame.event.get()
+    clock       = pygame.time.Clock()
+    all_sprites = load_all_images()
 
+    # ── Main loop ─────────────────────────────────────────────────────────────
+    while not done:
+        events    = pygame.event.get()
+        mouse_pos = pygame.mouse.get_pos()
+
+        # ── Event handling ────────────────────────────────────────────────────
         for event in events:
             if event.type == pygame.QUIT:
                 raise SystemExit
@@ -100,20 +113,78 @@ async def menu_start_async() -> list:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if host_button.collidepoint(event.pos):
                         state = STATE_HOST
+                        text  = ""
+                        active = False
+                        input_color = color_inactive
+                        dropdown_open = False
                     elif join_button.collidepoint(event.pos):
                         state = STATE_JOIN
+                        text  = ""
+                        active = False
+                        input_color = color_inactive
                     elif settings_button.collidepoint(event.pos):
-                        print("Button Clicked!")
+                        print("Settings clicked!")
                     elif quit_button.collidepoint(event.pos):
                         raise SystemExit
 
-            # ── Host / Join menus ─────────────────────────────────────────────
-            elif state in (STATE_HOST, STATE_JOIN):
-                arrow_button = pygame.Rect(10, 10, 125, 125)
-                start_button = pygame.Rect(
-                    screen_width // 2 - 250, screen_height // 2, 500, 150
-                )
+            # ── Host menu ─────────────────────────────────────────────────────
+            elif state == STATE_HOST:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        state = STATE_MAIN
+                        text  = ""
+                        active = False
+                        input_color  = color_inactive
+                        dropdown_open = False
+                    elif active:
+                        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                            room_name = text or "room1"
+                            print("Room name set:", room_name)
+                            text = ""
+                            menu_session_info[0] = room_name
+                        elif event.key == pygame.K_BACKSPACE:
+                            text = text[:-1]
+                        else:
+                            text += event.unicode
 
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    # Dropdown toggle/select
+                    if dropdown_rect.collidepoint(event.pos):
+                        dropdown_open = not dropdown_open
+                    elif dropdown_open:
+                        closed = False
+                        for i, opt_rect in enumerate(dropdown_options):
+                            if opt_rect.collidepoint(event.pos):
+                                selected_gamemode_index = i
+                                dropdown_open = False
+                                closed = True
+                                break
+                        if not closed:
+                            dropdown_open = False
+                    # Input box
+                    elif input_box.collidepoint(event.pos):
+                        active = not active
+                        input_color = color_active if active else color_inactive
+                    else:
+                        active = False
+                        input_color = color_inactive
+
+                    # Arrow — back to main
+                    if arrow_button.collidepoint(event.pos):
+                        state = STATE_MAIN
+                        text  = ""
+                        active = False
+                        input_color   = color_inactive
+                        dropdown_open = False
+
+                    # Start — create room with chosen gamemode
+                    if start_button.collidepoint(event.pos):
+                        menu_session_info[0] = room_name
+                        menu_session_info[1] = GAMEMODES[selected_gamemode_index]
+                        done = True
+
+            # ── Join menu ─────────────────────────────────────────────────────
+            elif state == STATE_JOIN:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         state = STATE_MAIN
@@ -123,7 +194,7 @@ async def menu_start_async() -> list:
                     elif active:
                         if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                             room_name = text or "room1"
-                            print("Entered:", room_name)
+                            print("Joining room:", room_name)
                             text = ""
                             menu_session_info[0] = room_name
                         elif event.key == pygame.K_BACKSPACE:
@@ -134,32 +205,33 @@ async def menu_start_async() -> list:
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if input_box.collidepoint(event.pos):
                         active = not active
+                        input_color = color_active if active else color_inactive
                     else:
                         active = False
-                    input_color = color_active if active else color_inactive
+                        input_color = color_inactive
 
+                    # Arrow — back to main
                     if arrow_button.collidepoint(event.pos):
                         state = STATE_MAIN
                         text  = ""
                         active = False
                         input_color = color_inactive
 
+                    # Start — join room, fetch gamemode from Firebase
                     if start_button.collidepoint(event.pos):
                         menu_session_info[0] = room_name
+                        menu_session_info[1] = "fetch"  # main.py reads gamemode from Firebase
                         done = True
 
-        # C. Render the frame (Drawing)
-        mouse_pos = pygame.mouse.get_pos()
+        # ── Rendering ─────────────────────────────────────────────────────────
 
         if state == STATE_MAIN:
-            screen.fill("purple")  # Clear screen with a background color
+            screen.fill("purple")
 
-            # Logo
             if 'pARTy_Logo' in all_sprites:
-                logo = pygame.transform.scale(all_sprites['pARTy_Logo'], (400, 300))  # Resize to n x m
+                logo = pygame.transform.scale(all_sprites['pARTy_Logo'], (400, 300))
                 screen.blit(logo, (screen_width // 2 - 200, -50))
 
-            # [Draw your sprites/shapes here]
             for key, x, y in [
                 ('host',     200, 175),
                 ('join',     200, 275),
@@ -167,74 +239,106 @@ async def menu_start_async() -> list:
                 ('quit',     200, 475),
             ]:
                 if key in all_sprites:
-                    screen.blit(all_sprites[key], (x, y))  # (x, y)
+                    screen.blit(all_sprites[key], (x, y))
 
-            # Host Button Monster
             if 'ibtc1' in all_sprites and 'ibtc2' in all_sprites:
                 sprite = all_sprites['ibtc2'] if host_button.collidepoint(mouse_pos) else all_sprites['ibtc1']
-                screen.blit(sprite, (80, 160))  # (x, y)
+                screen.blit(sprite, (80, 160))
 
-            # Join Button Monster
             if 'chudoid1' in all_sprites and 'chudoid2' in all_sprites:
                 sprite = all_sprites['chudoid2'] if join_button.collidepoint(mouse_pos) else all_sprites['chudoid1']
                 screen.blit(sprite, (680, 280))
 
-            # Settings Button Monster
             if 'Buster1' in all_sprites and 'Buster2' in all_sprites:
                 sprite = all_sprites['Buster2'] if settings_button.collidepoint(mouse_pos) else all_sprites['Buster1']
                 screen.blit(sprite, (80, 380))
 
-            #Quit Button Monster
             if 'confuzo1' in all_sprites and 'confuzo2' in all_sprites:
                 sprite = all_sprites['confuzo2'] if quit_button.collidepoint(mouse_pos) else all_sprites['confuzo1']
                 screen.blit(sprite, (680, 500))
 
-        elif state in (STATE_HOST, STATE_JOIN):
-            screen.fill((232, 105, 186))
+        elif state == STATE_HOST:
+            screen.fill((232, 105, 186))  # Pink
 
-            arrow_button = pygame.Rect(10, 10, 125, 125)
-            start_button = pygame.Rect(
-                screen_width // 2 - 250, screen_height // 2, 500, 150
-            )
-
-            ##Drawings
-            # Arrow button
+            # Arrow
             if 'arrow' in all_sprites:
                 if arrow_button.collidepoint(mouse_pos):
-                    big_arrow = pygame.transform.scale(all_sprites['arrow'], (120, 120))
-                    screen.blit(big_arrow, (10, 10))
+                    screen.blit(pygame.transform.scale(all_sprites['arrow'], (120, 120)), (10, 10))
                 else:
                     screen.blit(all_sprites['arrow'], (20, 20))
 
             # Start button
             if 'start' in all_sprites:
                 if start_button.collidepoint(mouse_pos):
-                    big_start = pygame.transform.scale(all_sprites['start'], (600, 150))
-                    screen.blit(big_start, (screen_width // 2 - 300, 325))
+                    screen.blit(pygame.transform.scale(all_sprites['start'], (600, 150)), (screen_width // 2 - 300, 425))
                 else:
-                    screen.blit(all_sprites['start'], (screen_width // 2 - 250, 350))
+                    screen.blit(all_sprites['start'], (screen_width // 2 - 250, 450))
 
-            label_surface = font.render("Enter room name.", True, (255, 255, 255))
-            screen.blit(label_surface, (screen_width // 2 - 120, screen_height // 2 - 100))
+            # Room name label + input
+            screen.blit(font.render("Enter room name.", True, (255, 255, 255)),
+                        (screen_width // 2 - 120, screen_height // 2 - 100))
 
-            # Input box with live typing
-            txt_surface = font.render(text, True, (255, 255, 255))
-            width = max(200, txt_surface.get_width() + 10)
-            input_box.w = width
+            txt_surface  = font.render(text, True, (255, 255, 255))
+            input_box.w  = max(200, txt_surface.get_width() + 10)
             screen.blit(txt_surface, (input_box.x + 5, input_box.y + 5))
             pygame.draw.rect(screen, input_color, input_box, 2)
 
             if room_name:
-                confirmed_surface = font.render(f"Room: {room_name}", True, (255, 255, 255))
-                screen.blit(confirmed_surface, (screen_width // 2 - 100, screen_height // 2 - 200))
+                screen.blit(font.render(f"Room: {room_name}", True, (255, 255, 255)),
+                            (screen_width // 2 - 100, screen_height // 2 - 200))
 
-        # D. Refresh the display
+            # ── Gamemode dropdown (HOST ONLY) ──────────────────────────────
+            pygame.draw.rect(screen, (255, 255, 255), dropdown_rect)
+            pygame.draw.rect(screen, (0, 0, 0),       dropdown_rect, 2)
+            screen.blit(
+                font.render(f"Mode: {GAMEMODES[selected_gamemode_index]}", True, (0, 0, 0)),
+                (dropdown_rect.x + 5, dropdown_rect.y + 8)
+            )
+
+            if dropdown_open:
+                for i, opt_rect in enumerate(dropdown_options):
+                    bg = (200, 230, 255) if i == selected_gamemode_index else (255, 255, 255)
+                    pygame.draw.rect(screen, bg,       opt_rect)
+                    pygame.draw.rect(screen, (0, 0, 0), opt_rect, 1)
+                    screen.blit(
+                        font.render(GAMEMODES[i], True, (0, 0, 0)),
+                        (opt_rect.x + 5, opt_rect.y + 8)
+                    )
+
+        elif state == STATE_JOIN:
+            screen.fill((100, 180, 232))  # Blue — visually distinct from host
+
+            # Arrow
+            if 'arrow' in all_sprites:
+                if arrow_button.collidepoint(mouse_pos):
+                    screen.blit(pygame.transform.scale(all_sprites['arrow'], (120, 120)), (10, 10))
+                else:
+                    screen.blit(all_sprites['arrow'], (20, 20))
+
+            # Start button
+            if 'start' in all_sprites:
+                if start_button.collidepoint(mouse_pos):
+                    screen.blit(pygame.transform.scale(all_sprites['start'], (600, 150)), (screen_width // 2 - 300, 425))
+                else:
+                    screen.blit(all_sprites['start'], (screen_width // 2 - 250, 450))
+
+            # Room name label + input
+            screen.blit(font.render("Enter room name to join.", True, (255, 255, 255)),
+                        (screen_width // 2 - 150, screen_height // 2 - 100))
+
+            txt_surface  = font.render(text, True, (255, 255, 255))
+            input_box.w  = max(200, txt_surface.get_width() + 10)
+            screen.blit(txt_surface, (input_box.x + 5, input_box.y + 5))
+            pygame.draw.rect(screen, input_color, input_box, 2)
+
+            if room_name:
+                screen.blit(font.render(f"Joining: {room_name}", True, (255, 255, 255)),
+                            (screen_width // 2 - 100, screen_height // 2 - 200))
+
+            # No dropdown — joiner fetches gamemode from Firebase
+
         pygame.display.flip()
-
-        # MANDATORY for pygbag — yields control back to the browser
-        await asyncio.sleep(0)
-
-        # E. Limit FPS to 60
+        await asyncio.sleep(0)  # Mandatory for pygbag
         clock.tick(60)
 
     return menu_session_info
@@ -248,8 +352,6 @@ def menu_start() -> list:
     import asyncio
 
     if sys.platform == "emscripten":
-        # Should not be called directly in browser — use menu_start_async
-        return ["room1"]
+        return ["room1", "freedraw"]
 
-    # Desktop: run the async version synchronously
     return asyncio.run(menu_start_async())

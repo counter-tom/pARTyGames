@@ -8,9 +8,11 @@ from network.stroke_deserializer import deserialize_stroke
 from commands import DrawStrokeCommand
 from commands.clear_canvas_command import ClearCanvasCommand
 import time
+import random
+import threading
 
 class UserManager:
-    def __init__(self, room_name):
+    def __init__(self, room_name, gamemode="freedraw"):
         self.users = {}
         self._next_id = 0
         self.master = MasterCanvas()
@@ -27,6 +29,18 @@ class UserManager:
         self.active_players = []
         self._presence_check_interval = 10
         self._last_presence_check = 0.0
+        #Pictionary
+        self.gamemode = gamemode
+        self.my_order = self.firebase.register_player_order()  # ✅ Claim join slot
+        self.game_state = {}
+        self._game_state_check_interval = 3
+        self._last_game_state_check = 0.0
+        self.i_am_drawer = False
+        self.current_word = None  # Only revealed to drawer
+        self._game_state_lock = threading.Lock()
+        self._ordered_players_cache = []
+        self._fetching_game_state = False
+        self._fetching_players = False
 
     def get_active_user(self):
         return self.users.get(self.active_user_id)
@@ -39,10 +53,6 @@ class UserManager:
         self.users[user_id] = User(screen, user_id, color)
         self.master.register(user_id, self.users[user_id].canvas)
 
-    def update(self, is_cursor_on_ui, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                pass
 
     def draw(self):
         active_user = self.users.get(self.active_user_id)
@@ -61,12 +71,13 @@ class UserManager:
             user.commander.execute(cmd)        
 
     def update(self, is_cursor_on_ui, events):
-        #Heartbeat check
+        # ── Heartbeat / presence check ────────────────────────────────────────
         now = time.time()
         if now - self._last_presence_check > self._presence_check_interval:
             self.active_players = self.firebase.fetch_active_players()
             self._last_presence_check = now
 
+        # ── Incoming chat messages ────────────────────────────────────────────
         if self._pending_initial_messages:
             for msg_dict in self._pending_initial_messages:
                 self._on_incoming_message(msg_dict)
@@ -75,18 +86,54 @@ class UserManager:
         for msg_dict in self.firebase.pop_incoming_messages():
             self._on_incoming_message(msg_dict)
 
-        # Replay initial strokes on first update
+        # ── Replay initial strokes on first update ────────────────────────────
         if self._pending_initial_strokes:
             active_user = self.users.get(self.active_user_id)
             if active_user is not None:
                 for stroke_dict in self._pending_initial_strokes:
-                    print(f"[DEBUG] stroke_dict keys: {stroke_dict.keys()}, data: {stroke_dict}")
                     stroke = deserialize_stroke(stroke_dict)
                     cmd = DrawStrokeCommand(active_user.canvas, stroke)
                     cmd.do()
                 if active_user.canvas.strokes:
                     active_user.canvas._last_pushed_stroke = active_user.canvas.strokes[-1]
             self._pending_initial_strokes = []
+
+        # ── Active user update + stroke sync ─────────────────────────────────
+        active_user = self.users.get(self.active_user_id)
+        if active_user is not None:
+            active_user.update(is_cursor_on_ui)
+
+            canvas = active_user.canvas
+            if not hasattr(canvas, '_last_pushed_stroke'):
+                canvas._last_pushed_stroke = None
+
+            if canvas.strokes and canvas.strokes[-1] is not canvas._last_pushed_stroke:
+                latest = canvas.strokes[-1]
+                canvas._last_pushed_stroke = latest
+                if not latest.remote:
+                    self.firebase.push_stroke(latest, active_user.color)
+
+            for stroke_dict in self.firebase.pop_incoming_strokes():
+                stroke = deserialize_stroke(stroke_dict)
+                if active_user is not None:
+                    if stroke.is_clear:
+                        active_user.canvas.clear()
+                        active_user.canvas._last_pushed_stroke = None
+                    else:
+                        cmd = DrawStrokeCommand(active_user.canvas, stroke)
+                        cmd.do()
+
+        # ── Pictionary game state (non-blocking) ──────────────────────────────
+        if self.gamemode == "pictionary":
+            now = time.time()
+            if now - self._last_game_state_check > self._game_state_check_interval:
+                self._last_game_state_check = now
+                if not self._fetching_game_state:
+                    self._fetching_game_state = True
+                    threading.Thread(
+                        target=self._fetch_game_state_async,
+                        daemon=True
+                    ).start()
 
         active_user = self.users.get(self.active_user_id)
         if active_user is not None:
@@ -108,6 +155,20 @@ class UserManager:
                     else:
                         cmd = DrawStrokeCommand(active_user.canvas, stroke)
                         cmd.do()
+                        
+        #Pictionary game state update
+    def _evaluate_game_state(self):
+        players = self.firebase.fetch_ordered_players()
+        enough_players = len(players) >= 2
+        round_active = self.game_state.get("round_active", False)
+        current_drawer = self.game_state.get("current_drawer")
+
+        print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")  # ✅ Temp
+
+        self.i_am_drawer = (current_drawer == self.firebase.user_id)
+
+        if enough_players and not round_active and players and players[0] == self.firebase.user_id:
+            self._start_new_round(players)       
 
     def get_player_count(self) -> int:
         return len(self.active_players)
@@ -126,3 +187,80 @@ class UserManager:
         if not hasattr(self, 'incoming_chat'):
             self.incoming_chat = []
         self.incoming_chat.append((msg_dict.get("uid", "?"), msg_dict.get("message", "")))
+
+    ##Pictionary Methods
+    def _evaluate_game_state(self):
+        players = self.firebase.fetch_ordered_players()
+        enough_players = len(players) >= 2
+        round_active = self.game_state.get("round_active", False)
+        current_drawer = self.game_state.get("current_drawer")
+
+        self.i_am_drawer = (current_drawer == self.firebase.user_id)
+
+        # Start a new round if no active round and enough players
+        # Only the player with order=0 (or lowest order present) acts as host
+        if enough_players and not round_active and players and players[0] == self.firebase.user_id:
+            self._start_new_round(players)    
+            
+    def _start_new_round(self, players: list):
+        turn_index = self.game_state.get("turn_index", 0)
+        next_index = turn_index % len(players)
+        drawer_uid = players[next_index]
+        word = random.choice(self.firebase.FRUIT_POOL)
+        print(f"[Game] New round — drawer: {drawer_uid}, word: {word}, i_am_drawer: {self.i_am_drawer}")
+        self.firebase.push_game_state(next_index, drawer_uid, word)
+        self.game_state = self.firebase.fetch_game_state()
+        self.i_am_drawer = (drawer_uid == self.firebase.user_id)
+        if self.i_am_drawer:
+            self.current_word = word
+            print(f"[Game] My word is: {self.current_word}")  # ✅
+            self.firebase.push_clear()
+
+    def check_guess(self, guess: str) -> bool:
+        """Call this when a non-drawer submits a chat message."""
+        word = self.game_state.get("current_word", "")
+        if word and guess.strip().lower() == word.lower():
+            print(f"[Game] Correct guess by {self.firebase.user_id}!")
+            turn_index = self.game_state.get("turn_index", 0)
+            self.firebase.push_game_state(turn_index + 1, "", "")  # ✅ Advance turn
+            self.firebase.end_round()
+            return True
+        return False
+
+    def is_input_locked(self) -> bool:
+        """Uses cached players — no network call."""
+        if self.gamemode != "pictionary":
+            return False
+        with self._game_state_lock:
+            players = list(self._ordered_players_cache)
+        return len(players) >= 2 and not self.i_am_drawer      
+    
+    # Add these new methods
+    def _fetch_game_state_async(self):
+        """Runs in background thread — no blocking on main loop."""
+        try:
+            game_state = self.firebase.fetch_game_state()
+            players    = self.firebase.fetch_ordered_players()
+            with self._game_state_lock:
+                self.game_state = game_state
+                self._ordered_players_cache = players
+            self._evaluate_game_state_cached()
+        finally:
+            self._fetching_game_state = False
+
+    def _evaluate_game_state_cached(self):
+        """Uses cached players — safe to call from background thread."""
+        with self._game_state_lock:
+            players        = list(self._ordered_players_cache)
+            game_state     = dict(self.game_state)
+
+        enough_players  = len(players) >= 2
+        round_active    = game_state.get("round_active", False)
+        current_drawer  = game_state.get("current_drawer")
+
+        print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")
+
+        self.i_am_drawer = (current_drawer == self.firebase.user_id)
+
+        if enough_players and not round_active and players and players[0] == self.firebase.user_id:
+            self._start_new_round(players)

@@ -195,6 +195,27 @@ class FirebaseClient:
         except Exception as e:
             print(f"[Network] fetch_active_players error: {e}")
             return []
+        
+    def register_player_order(self) -> int:
+        """
+        Claims the next join order slot for this player.
+        Returns the integer slot claimed (0, 1, 2...).
+        """
+        purl = f"{DB_URL}/rooms/{self.room_id}/presence.json"
+        try:
+            response = requests.get(purl, timeout=5)
+            data = response.json()
+            order = len(data) if isinstance(data, dict) else 0
+        except:
+            order = 0
+
+        url = f"{DB_URL}/rooms/{self.room_id}/presence/{self.user_id}.json"
+        requests.put(url, json={
+            "uid":   self.user_id,
+            "ts":    time.time(),
+            "order": order
+        }, timeout=5)
+        return order    
 
     def leave_room(self):
         self._fb_delete(f"rooms/{self.room_id}/presence/{self.user_id}")
@@ -316,6 +337,91 @@ class FirebaseClient:
             self._incoming_messages.clear()
         return messages
     
+    #TODO Topic draw pool
+    FRUIT_POOL = [
+        "apple", "banana", "cherry", "grape", "mango",
+        "orange", "peach", "pear", "pineapple", "strawberry",
+        "watermelon", "lemon", "lime", "coconut", "kiwi"
+    ]
+
+    # ── Room setup ────────────────────────────────────────────────────────────────
+
+    def push_gamemode(self, gamemode: str):
+        """Host writes gamemode when creating the room."""
+        self._fb_set(f"rooms/{self.room_id}/gamemode", gamemode)
+
+    def fetch_gamemode(self) -> str:
+        """Joiners read the gamemode on connect."""
+        url = f"{DB_URL}/rooms/{self.room_id}/gamemode.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            return data if isinstance(data, str) else "freedraw"
+        except Exception as e:
+            print(f"[Network] fetch_gamemode error: {e}")
+            return "freedraw"
+
+    # ── Presence order ────────────────────────────────────────────────────────────
+
+    def register_player_order(self):
+        """
+        Claim the next join order slot.
+        Returns the integer slot claimed (0, 1, 2...).
+        """
+        url = f"{DB_URL}/rooms/{self.room_id}/presence/{self.user_id}.json"
+        # Read current presence count to assign order
+        purl = f"{DB_URL}/rooms/{self.room_id}/presence.json"
+        try:
+            response = requests.get(purl, timeout=5)
+            data = response.json()
+            order = len(data) if isinstance(data, dict) else 0
+        except:
+            order = 0
+        requests.put(url, json={"uid": self.user_id, "ts": time.time(), "order": order}, timeout=5)
+        return order
+
+    # ── Game state ────────────────────────────────────────────────────────────────
+
+    def push_game_state(self, turn_index: int, drawer_uid: str, word: str):
+        self._fb_set(f"rooms/{self.room_id}/game_state", {
+            "turn_index": turn_index,
+            "current_drawer": drawer_uid,
+            "current_word": word,
+            "round_active": True
+        })
+
+    def fetch_game_state(self) -> dict:
+        url = f"{DB_URL}/rooms/{self.room_id}/game_state.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            return data if isinstance(data, dict) else {}
+        except Exception as e:
+            print(f"[Network] fetch_game_state error: {e}")
+            return {}
+
+    def end_round(self):
+        """Clear word, mark round inactive. turn_index increment handled by new round start."""
+        self._fb_set(f"rooms/{self.room_id}/game_state/current_word", None)
+        self._fb_set(f"rooms/{self.room_id}/game_state/round_active", False)
+
+    def fetch_ordered_players(self) -> list:
+        """Returns uids sorted by their join order."""
+        url = f"{DB_URL}/rooms/{self.room_id}/presence.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            if not data or not isinstance(data, dict):
+                return []
+            now = time.time()
+            active = [
+                v for v in data.values()
+                if now - v.get("ts", 0) < self.PRESENCE_TIMEOUT
+            ]
+            return [p["uid"] for p in sorted(active, key=lambda x: x.get("order", 0))]
+        except Exception as e:
+            print(f"[Network] fetch_ordered_players error: {e}")
+            return []
 #########################
     # def _handle_event(self, raw: str):
     #     """Parse an SSE payload and queue any foreign strokes or messages."""
@@ -399,3 +505,4 @@ class FirebaseClient:
             requests.delete(url, timeout=5)
         except Exception as e:
             print(f"[Network] Delete error: {e}")
+

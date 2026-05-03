@@ -18,7 +18,13 @@ async def main():
     #Begin Menu
     menu_session_info = await menu_start_async()
     room_name = menu_session_info[0]
-    print(room_name)
+    gamemode  = menu_session_info[1] if len(menu_session_info) > 1 else "freedraw"
+    print("Room name: " + room_name)
+
+    #TODO host vs joiner value
+    #umanager = UserManager(room_name, gamemode=gamemode)
+
+    #umanager.firebase.push_gamemode(gamemode)
 
     in_lobby = True
 
@@ -37,7 +43,9 @@ async def main():
     pygame.display.set_caption("pARTyGames")
     font = pygame.font.Font("freesansbold.ttf", 18)
 
-    umanager = UserManager(room_name)
+    umanager = UserManager(room_name, gamemode=gamemode)
+    umanager.firebase.push_gamemode(gamemode)
+    
     umanager.add_user(screen)
 
     running = True
@@ -124,7 +132,10 @@ async def main():
                 if event.type == pygame.KEYDOWN and chat_active:
                     if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
                         if chat_text.strip():
+                            if umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
+                                umanager.check_guess(chat_text)
                             chat_messages.append((umanager.firebase.user_id, chat_text))  # Local display
+                            #TODO hide correct guesses. For now the game ends on a correct guess though.
                             umanager.firebase.push_chat_message(chat_text)                 # Push to Firebase
                             chat_text = ""
                     elif event.key == pygame.K_BACKSPACE:
@@ -137,11 +148,15 @@ async def main():
                 active_user.color = rgb_picker.get_color()
                 active_user.cursor.color = active_user.color
                 active_user.cursor.rgb_picker = rgb_picker
+            #TODO fix
+            input_locked = umanager.is_input_locked()    
 
             hovering_ui = (top_buttons.is_hovering_ui
-                           or menu_button_rect.collidepoint(pygame.mouse.get_pos())
-                           or all_button_rect.collidepoint(pygame.mouse.get_pos())
-                           or chatroom_rect.collidepoint(pygame.mouse.get_pos()))
+                        or menu_button_rect.collidepoint(pygame.mouse.get_pos())
+                        or all_button_rect.collidepoint(pygame.mouse.get_pos())
+                        or chatroom_rect.collidepoint(pygame.mouse.get_pos())
+                        or input_locked)  # ✅ was missing
+            
             if menu_open:
                 hovering_ui = hovering_ui or tool_grid.is_hovering_ui or rgb_picker.is_hovering()
 
@@ -191,6 +206,13 @@ async def main():
                 rgb_picker.draw()
 
             umanager.draw_cursor()
+
+            if umanager.i_am_drawer and umanager.current_word:
+                word_surface = font.render(f"Draw: {umanager.current_word}", True, (255, 255, 0))
+                screen.blit(word_surface, (10, 10))
+            elif umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
+                guess_surface = font.render("Guess the drawing!", True, (255, 255, 255))
+                screen.blit(guess_surface, (10, 10))
 
             # Update (includes Firebase push/pull)
             umanager.update(hovering_ui, events)
