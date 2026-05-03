@@ -335,11 +335,60 @@ class FirebaseClient:
             self._incoming_messages.clear()
         return messages
     
-    #TODO Topic draw pool
+    #TODO add more stuff
+
     FRUIT_POOL = [
         "apple", "banana", "cherry", "grape", "mango",
         "orange", "peach", "pear", "pineapple", "strawberry",
-        "watermelon", "lemon", "lime", "coconut", "kiwi"
+        "watermelon", "lemon", "lime", "coconut", "kiwi", 
+        "baseball", "football", "basketball", "puck", "hockey stick", 
+        "baseball bat", "tennis ball", "bowling ball", "golf club", 
+        "skateboard", "surf board", "boxing glove", "pool cue"
+        "sailboat", "popsicle", "brain", 
+        "birthday", "cake", "skirt", "knee", 
+        "pineapple", "tusk", "sprinkler", 
+        "money", "spool", "lighthouse", 
+        "doormat", "face", "flute", 
+        "rug", "snowball", "purse", 
+        "owl", "gate", "suitcase", 
+        "stomach", "doghouse", "pajamas", 
+        "bathroom", "scale", "peach", "newspaper", 
+        "watering", "can", "hook", "school", 
+        "beaver", "french", "fries", "beehive", 
+        "beach", "artist", "flagpole", 
+        "camera", "hair", "dryer", "mushroom", 
+        "toe", "pretzel", "TV", 
+        "quilt", "chalk", "dollar", 
+        "soda", "chin", "swing", 
+        "garden", "ticket", "boot", 
+        "cello", "rain", "clam", 
+        "pelican", "stingray", "fur", 
+        "blowfish", "rainbow", "happy", 
+        "Pictionary", "Words:", "Medium",
+        "fist", "base", "storm", 
+        "mitten", "easel", "nail", 
+        "sheep", "stoplight", "coconut", 
+        "crib", "hippopotamus", "ring", 
+        "seesaw", "plate", "fishing", "pole", 
+        "hopscotch", "bell", "pepper", "front", "porch", 
+        "cheek", "video", "camera", "washing", "machine", 
+        "telephone", "silverware", "barn", 
+        "snowflake", "bib", "flashlight", 
+        "popsicle", "muffin", "sunflower", 
+        "skirt", "top", "hat", "swimming", "pool", 
+        "tusk", "radish", "peanut", 
+        "spool", "poodle", "potato", 
+        "face", "shark", "fang", 
+        "snowball", "waist", "spoon", 
+        "gate", "bottle", "mail", 
+        "sheep", "lobster", "ice", 
+        "crib", "lawn", "mower", "bubble", 
+        "seesaw", "pencil", "cheeseburger", 
+        "hopscotch", "rocking", "chair", "corner", 
+        "cheek", "rolly", "polly", "popcorn", 
+        "telephone", "yo-yo", "seahorse", 
+        "snowflake", "spine", "desk",
+
     ]
 
     # Room setup 
