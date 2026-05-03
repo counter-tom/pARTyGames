@@ -111,7 +111,7 @@ async def main():
             top_buttons.update()
             if menu_open:
                 tool_grid.update()
-
+            input_locked = umanager.is_input_locked()    
             for event in events:
                 if event.type == pygame.QUIT:
                     running = False  # Use flag instead of SystemExit for cleaner web exit
@@ -121,9 +121,11 @@ async def main():
                         menu_open = not menu_open
                         continue
 
-                top_buttons.handle_events(event)
+                if not input_locked:
+                    top_buttons.handle_events(event)
                 if menu_open:
-                    tool_grid.handle_events(event)
+                    if not input_locked:
+                        tool_grid.handle_events(event)
                     rgb_picker.handle_event(event)
 
                 # Chat event handler
@@ -155,7 +157,7 @@ async def main():
                 active_user.cursor.color = active_user.color
                 active_user.cursor.rgb_picker = rgb_picker
             #TODO fix
-            input_locked = umanager.is_input_locked()    
+            
 
             hovering_ui = (top_buttons.is_hovering_ui
                         or menu_button_rect.collidepoint(pygame.mouse.get_pos())
