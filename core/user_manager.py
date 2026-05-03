@@ -74,7 +74,7 @@ class UserManager:
             user.commander.execute(cmd)        
 
     def update(self, is_cursor_on_ui, events):
-        # ── Heartbeat / presence check ────────────────────────────────────────
+        #Heartbeat 
         now = time.time()
         if now - self._last_presence_check > self._presence_check_interval:
             self._last_presence_check = now
@@ -82,7 +82,7 @@ class UserManager:
                 self._fetching_players = True
                 threading.Thread(target=self._fetch_players_async, daemon=True).start()
 
-        # ── Incoming chat messages ────────────────────────────────────────────
+        #Incoming chat messages
         if self._pending_initial_messages:
             for msg_dict in self._pending_initial_messages:
                 self._on_incoming_message(msg_dict)
@@ -91,7 +91,7 @@ class UserManager:
         for msg_dict in self.firebase.pop_incoming_messages():
             self._on_incoming_message(msg_dict)
 
-        # ── Replay initial strokes on first update ────────────────────────────
+        #Replay initial strokes on first update
         if self._pending_initial_strokes:
             active_user = self.users.get(self.active_user_id)
             if active_user is not None:
@@ -103,7 +103,7 @@ class UserManager:
                     active_user.canvas._last_pushed_stroke = active_user.canvas.strokes[-1]
             self._pending_initial_strokes = []
 
-        # ── Active user update + stroke sync ─────────────────────────────────
+        #Active user update + stroke sync
         active_user = self.users.get(self.active_user_id)
         if active_user is not None:
             active_user.update(is_cursor_on_ui)
@@ -129,7 +129,7 @@ class UserManager:
                         cmd = DrawStrokeCommand(active_user.canvas, stroke)
                         cmd.do()
 
-        # ── Pictionary game state (non-blocking) ──────────────────────────────
+        #Pictionary game state
         if self.gamemode == "pictionary":
             now = time.time()
             if now - self._last_game_state_check > self._game_state_check_interval:
@@ -260,7 +260,7 @@ class UserManager:
                 self.active_players      = players
                 self._last_player_count  = current_count
 
-            # ✅ Player count changed — reset turn index
+            #reset turn index
             if self.gamemode == "pictionary" and current_count != last_count and last_count != 0:
                 print(f"[Game] Player count changed {last_count} → {current_count}, resetting turn index.")
                 self.firebase.reset_turn()
@@ -277,11 +277,11 @@ class UserManager:
 
         with self._game_state_lock:
             self.i_am_drawer = (current_drawer == self.firebase.user_id)
-            # ✅ Always sync current_word from Firebase for the new drawer
+            #sync current_word from Firebase for the new drawer
             if self.i_am_drawer and round_active:
                 self.current_word = game_state.get("current_word", "")
             elif not self.i_am_drawer:
-                self.current_word = None  # ✅ Guessers never see the word
+                self.current_word = None  #Guessers never see the word
 
         enough_players = len(players) >= 2
         print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")

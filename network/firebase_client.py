@@ -75,8 +75,7 @@ class FirebaseClient:
         self._listener_thread = None
         self._incoming_messages = []  
 
-    # ── Connection ────────────────────────────────────────────────────────────
-
+    # Connection 
     def connect(self) -> bool:
         """
         Test connectivity to Firebase. Returns True if reachable.
@@ -95,7 +94,7 @@ class FirebaseClient:
             print(f"[Network] Could not reach Firebase: {e}")
             return False
 
-    # ── Listener ──────────────────────────────────────────────────────────────
+    #Listener
 
     def start_listener(self):
         """
@@ -230,8 +229,7 @@ class FirebaseClient:
         ).start()
 
 
-    # ── Incoming strokes ──────────────────────────────────────────────────────
-
+    #Incoming strokes 
     def pop_incoming_strokes(self) -> list:
         """
         Return and clear all queued incoming strokes from other users.
@@ -261,7 +259,7 @@ class FirebaseClient:
             print(f"[Network] fetch_strokes error: {e}")
             return []
 
-    # ── Outgoing strokes ──────────────────────────────────────────────────────
+    #Outgoing strokes
 
     def push_stroke(self, stroke, color):
         """
@@ -302,8 +300,6 @@ class FirebaseClient:
             "dots": dots,
             "ts": time.time()
         }
-
-    # ── Clear ─────────────────────────────────────────────────────────────────
 
     # Chat functions
     def push_chat_message(self, message: str):
@@ -346,7 +342,7 @@ class FirebaseClient:
         "watermelon", "lemon", "lime", "coconut", "kiwi"
     ]
 
-    # ── Room setup ────────────────────────────────────────────────────────────────
+    # Room setup 
 
     def push_gamemode(self, gamemode: str):
         """Host writes gamemode when creating the room."""
@@ -363,7 +359,7 @@ class FirebaseClient:
             print(f"[Network] fetch_gamemode error: {e}")
             return "freedraw"
 
-    # ── Presence order ────────────────────────────────────────────────────────────
+    # Presence order
 
     def register_player_order(self):
         """
@@ -382,7 +378,7 @@ class FirebaseClient:
         requests.put(url, json={"uid": self.user_id, "ts": time.time(), "order": order}, timeout=5)
         return order
 
-    # ── Game state ────────────────────────────────────────────────────────────────
+    # Game state 
 
     def push_game_state(self, turn_index: int, drawer_uid: str, word: str):
         self._fb_set(f"rooms/{self.room_id}/game_state", {
@@ -429,34 +425,6 @@ class FirebaseClient:
         except Exception as e:
             print(f"[Network] fetch_ordered_players error: {e}")
             return []
-#########################
-    # def _handle_event(self, raw: str):
-    #     """Parse an SSE payload and queue any foreign strokes or messages."""
-    #     try:
-    #         payload = json.loads(raw)
-    #         path = payload.get("path", "")
-    #         data = payload.get("data")
-    #         if not data:
-    #             return
-
-    #         if "chat" in path:
-    #             if isinstance(data, dict):
-    #                 if "message" in data:
-    #                     self._queue_message_if_foreign(data)
-    #                 else:
-    #                     for msg in data.values():
-    #                         if isinstance(msg, dict):
-    #                             self._queue_message_if_foreign(msg)
-    #         else:
-    #             if isinstance(data, dict):
-    #                 if "dots" in data:
-    #                     self._queue_if_foreign(data)
-    #                 else:
-    #                     for stroke in data.values():
-    #                         if isinstance(stroke, dict):
-    #                             self._queue_if_foreign(stroke)
-    #     except Exception:
-    #         pass
 
     def _queue_message_if_foreign(self, msg: dict):
         """Queue chat messages from other users."""
@@ -464,8 +432,6 @@ class FirebaseClient:
             with self._lock:
                 self._incoming_messages.append(msg)    
 
-
-#########################
 
     def push_clear(self):
     # Wipe all strokes from DB
@@ -518,7 +484,7 @@ class FirebaseClient:
         except Exception as e:
             print(f"[Network] Set error: {e}")        
 
-    # ── Firebase REST ─────────────────────────────────────────────────────────
+    # Firebase REST 
 
     def _fb_push(self, path: str, data: dict):
         url = f"{DB_URL}/{path}.json"

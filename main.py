@@ -20,18 +20,13 @@ async def main():
     room_name = menu_session_info[0]
     gamemode  = menu_session_info[1] if len(menu_session_info) > 1 else "freedraw"
     print("Room name: " + room_name)
-    # ✅ Fetch gamemode BEFORE creating umanager if joiner
+    #Fetch gamemode BEFORE creating umanager if joiner
     if gamemode == "fetch":
         from network import FirebaseClient
         import uuid
         temp_client = FirebaseClient(room_id=room_name, user_id=str(uuid.uuid4())[:8])
         gamemode = temp_client.fetch_gamemode()
         print(f"[Game] Fetched gamemode from Firebase: {gamemode}")
-
-    #TODO host vs joiner value
-    #umanager = UserManager(room_name, gamemode=gamemode)
-
-    #umanager.firebase.push_gamemode(gamemode)
 
     in_lobby = True
 
@@ -142,9 +137,9 @@ async def main():
                         if chat_text.strip():
                             if umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
                                 umanager.check_guess(chat_text)
-                            chat_messages.append((umanager.firebase.user_id, chat_text))  # Local display
-                            #TODO hide correct guesses. For now the game ends on a correct guess though.
-                            umanager.firebase.push_chat_message(chat_text)                 # Push to Firebase
+                            chat_messages.append((umanager.firebase.user_id, chat_text))  
+                            
+                            umanager.firebase.push_chat_message(chat_text)                
                             chat_text = ""
                     elif event.key == pygame.K_BACKSPACE:
                         chat_text = chat_text[:-1]
@@ -163,7 +158,7 @@ async def main():
                         or menu_button_rect.collidepoint(pygame.mouse.get_pos())
                         or all_button_rect.collidepoint(pygame.mouse.get_pos())
                         or chatroom_rect.collidepoint(pygame.mouse.get_pos())
-                        or input_locked)  # ✅ was missing
+                        or input_locked) 
             
             if menu_open:
                 hovering_ui = hovering_ui or tool_grid.is_hovering_ui or rgb_picker.is_hovering()

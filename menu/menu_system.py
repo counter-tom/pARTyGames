@@ -83,10 +83,10 @@ def check_room_exists(room_id: str) -> bool:
         return False
 
 
-# ── Gamemode options ───────────────────────────────────────────────────────────
+#Gamemode options
 GAMEMODES = ["freedraw", "pictionary"]
 
-# ── Scrollable room list constants ────────────────────────────────────────────
+#Scrollable room list constants 
 ROOM_BTN_HEIGHT = 50
 ROOM_BTN_GAP    = 10
 ROOM_BTN_WIDTH  = 400
@@ -110,18 +110,18 @@ async def menu_start_async() -> list:
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption("pARTy")
 
-    # ── Main menu button rects ────────────────────────────────────────────────
+    #Main menu button rects 
     host_button     = pygame.Rect(220, 200, 450, 50)
     join_button     = pygame.Rect(220, 300, 450, 50)
     settings_button = pygame.Rect(220, 400, 450, 50)
     quit_button     = pygame.Rect(220, 500, 450, 50)
 
-    # ── Shared sub-menu rects ─────────────────────────────────────────────────
+    #Shared sub-menu rects 
     arrow_button = pygame.Rect(10, 10, 125, 125)
     start_button = pygame.Rect(screen_width // 2 - 250, screen_height // 2 + 100, 500, 150)
     input_box    = pygame.Rect(screen_width // 2 - 120, screen_height // 2 - 150, 200, 40)
 
-    # ── Input / color state ───────────────────────────────────────────────────
+    # Input / color state
     color_inactive = pygame.Color('gray')
     color_active   = pygame.Color('dodgerblue')
     input_color    = color_inactive
@@ -133,7 +133,7 @@ async def menu_start_async() -> list:
 
     host_error_msg = ""  # ✅ Shown when room already exists
 
-    # ── Gamemode dropdown (HOST only) ─────────────────────────────────────────
+    #Gamemode dropdown (HOST only) 
     selected_gamemode_index = 0
     dropdown_open  = False
     dropdown_rect  = pygame.Rect(screen_width // 2 - 120, screen_height // 2 - 50, 200, 40)
@@ -142,7 +142,7 @@ async def menu_start_async() -> list:
         for i in range(len(GAMEMODES))
     ]
 
-    # ── Join menu — scrollable room list ──────────────────────────────────────
+    # Join menu - scrollable room list 
     room_list     = []
     selected_room = None
     scroll_offset = 0
@@ -155,7 +155,7 @@ async def menu_start_async() -> list:
 
     refresh_rect = pygame.Rect(scroll_box_x, scroll_box_y + scroll_box_h + 10, ROOM_BTN_WIDTH, 35)
 
-    # ── State machine ─────────────────────────────────────────────────────────
+    #State machine 
     STATE_MAIN = "main"
     STATE_HOST = "host"
     STATE_JOIN = "join"
@@ -165,7 +165,7 @@ async def menu_start_async() -> list:
     clock       = pygame.time.Clock()
     all_sprites = load_all_images()
 
-    # ── Main loop ─────────────────────────────────────────────────────────────
+    #Main loop 
     while not done:
         events    = pygame.event.get()
         mouse_pos = pygame.mouse.get_pos()
@@ -174,7 +174,7 @@ async def menu_start_async() -> list:
             if event.type == pygame.QUIT:
                 raise SystemExit
 
-            # ── Main menu ─────────────────────────────────────────────────────
+            #Main menu 
             if state == STATE_MAIN:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if host_button.collidepoint(event.pos):
@@ -187,13 +187,13 @@ async def menu_start_async() -> list:
                         state         = STATE_JOIN
                         scroll_offset = 0
                         selected_room = None
-                        room_list     = fetch_rooms()  # ✅ Fetch on entering join
+                        room_list     = fetch_rooms()  
                     elif settings_button.collidepoint(event.pos):
                         print("Settings clicked!")
                     elif quit_button.collidepoint(event.pos):
                         raise SystemExit
 
-            # ── Host menu ─────────────────────────────────────────────────────
+            # Host menu 
             elif state == STATE_HOST:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -251,7 +251,7 @@ async def menu_start_async() -> list:
                             menu_session_info[1] = GAMEMODES[selected_gamemode_index]
                             done = True
 
-            # ── Join menu ─────────────────────────────────────────────────────
+            #Join menu 
             elif state == STATE_JOIN:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -274,7 +274,7 @@ async def menu_start_async() -> list:
                         selected_room = None
 
                     elif scroll_box_rect.collidepoint(event.pos):
-                        # ✅ Map click position to room index accounting for scroll
+                        # Map click position to room index accounting for scroll
                         rel_y = event.pos[1] - scroll_box_y + scroll_offset
                         idx   = rel_y // (ROOM_BTN_HEIGHT + ROOM_BTN_GAP)
                         if 0 <= idx < len(room_list):
@@ -284,7 +284,7 @@ async def menu_start_async() -> list:
                             print(f"[Menu] Joining room: {selected_room}")
                             done = True  # ✅ Single click selects and joins
 
-        # ── Rendering ─────────────────────────────────────────────────────────
+        #Rendering 
 
         if state == STATE_MAIN:
             screen.fill("purple")
@@ -381,11 +381,11 @@ async def menu_start_async() -> list:
             screen.blit(font.render("Select a Room", True, (255, 255, 255)),
                         (screen_width // 2 - 90, 100))
 
-            # ── Scrollable box background ──────────────────────────────────────
+            # Scrollable box background
             pygame.draw.rect(screen, (70, 130, 180), scroll_box_rect)
             pygame.draw.rect(screen, (255, 255, 255), scroll_box_rect, 2)
 
-            # ── Room buttons rendered onto a clipped surface ───────────────────
+            #Room buttons rendered onto a clipped surface 
             clip_surface = pygame.Surface((scroll_box_w, scroll_box_h), pygame.SRCALPHA)
 
             if not room_list:
@@ -424,7 +424,7 @@ async def menu_start_async() -> list:
 
             screen.blit(clip_surface, (scroll_box_x, scroll_box_y))
 
-            # ── Scrollbar ─────────────────────────────────────────────────────
+            #Scrollbar 
             total_h = len(room_list) * (ROOM_BTN_HEIGHT + ROOM_BTN_GAP)
             if total_h > scroll_box_h:
                 bar_h = max(30, scroll_box_h * scroll_box_h // total_h)
@@ -433,7 +433,7 @@ async def menu_start_async() -> list:
                 pygame.draw.rect(screen, (200, 200, 200), (bar_x, scroll_box_y, 8, scroll_box_h), border_radius=4)
                 pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, 8, bar_h), border_radius=4)
 
-            # ── Refresh button ────────────────────────────────────────────────
+            # Refresh button 
             refresh_color = (150, 210, 255) if refresh_rect.collidepoint(mouse_pos) else (255, 255, 255)
             pygame.draw.rect(screen, refresh_color, refresh_rect, border_radius=6)
             pygame.draw.rect(screen, (0, 0, 0),     refresh_rect, 2,  border_radius=6)
