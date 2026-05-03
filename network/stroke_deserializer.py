@@ -11,39 +11,38 @@ from drawing.stroke import Stroke
 
 
 class _RawColor:
-    """
-    Minimal stand-in for a Color enum value when deserializing
-    incoming strokes. PaintDot expects an object with a .value
-    tuple of (r, g, b).
-    """
     def __init__(self, r, g, b):
         self.value = (r, g, b)
 
 
 def deserialize_stroke(stroke_dict: dict) -> Stroke:
     if stroke_dict.get("is_fill"):
-            s = Stroke([], remote=True)
-            s.is_fill = True
-            s.fill_x  = stroke_dict["fill_x"]
-            s.fill_y  = stroke_dict["fill_y"]
+        s = Stroke([], remote=True)
+        s.is_fill = True
+        s.fill_x  = stroke_dict["fill_x"]
+        s.fill_y  = stroke_dict["fill_y"]
+        color = stroke_dict["color"]
+        if isinstance(color, dict):
+            color = [color[str(k)] for k in range(len(color))]
+        r, g, b = color
+        s.fill_color = (r, g, b)
+        return s
 
-            # ✅ Firebase may return color as {0: r, 1: g, 2: b} instead of [r, g, b]
-            color = stroke_dict["color"]
-            if isinstance(color, dict):
-                color = [color[k] for k in sorted(color.keys())]
-            r, g, b = color
-            s.fill_color = (r, g, b)
-            return s
-    
     color = stroke_dict["color"]
     if isinstance(color, dict):
-        color = [color[k] for k in sorted(color.keys())]
+        color = [color[str(k)] for k in range(len(color))]
     r, g, b = color
+
+    # ✅ Firebase returns arrays as numbered dicts — normalize dots
+    raw_dots = stroke_dict.get("dots", [])
+    if isinstance(raw_dots, dict):
+        raw_dots = [raw_dots[str(k)] for k in range(len(raw_dots))]
+
     dots = []
-    for dot_data in stroke_dict.get("dots", []):
-        size = int(dot_data["size"])
+    for dot_data in raw_dots:
+        size     = int(dot_data["size"])
         centre_x = dot_data["x"] + size / 2
         centre_y = dot_data["y"] + size / 2
-        dot = PaintDot(size, (centre_x, centre_y), color)
+        dot      = PaintDot(size, (centre_x, centre_y), _RawColor(r, g, b))
         dots.append(dot)
-    return Stroke(dots, remote=True)  # <-- flag it
+    return Stroke(dots, remote=True)

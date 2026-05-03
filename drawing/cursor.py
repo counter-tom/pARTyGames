@@ -25,7 +25,7 @@ class Cursor:
         self.was_mouse_down = False
         self.line_start = None
         self.line_preview = []
-        self.firebase = firebase  # ✅ Add this
+        self.firebase = firebase  
 
     def execute_command(self, command_class, *args):
         self.commander.execute(command_class(self.canvas, *args))

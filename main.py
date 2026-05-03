@@ -7,6 +7,7 @@ from ui import ButtonManager
 from ui.rgb_picker import RGBPicker
 from menu.menu_system import menu_start_async
 from ui.tool_grid import ToolGrid
+from gamemodes.contest import ContestGame
 
 #TODO add guessing game mode
 ##TODO add sidebar that displays joined users.
@@ -31,6 +32,18 @@ def wrap_text(text, font, max_width):
         lines.append(current)
     return lines
 
+def draw_outlined_text(surface, text, font, pos, text_color, outline_color):
+    x, y = pos
+    # Render outline (offset in 8 directions)
+    outline_surface = font.render(text, True, outline_color)
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            if dx != 0 or dy != 0:
+                surface.blit(outline_surface, (x + dx, y + dy))
+
+        # Render main text
+        text_surface = font.render(text, True, text_color)
+        surface.blit(text_surface, (x, y))
 
 async def main():
     #Begin Menu
@@ -38,13 +51,18 @@ async def main():
     room_name = menu_session_info[0]
     gamemode  = menu_session_info[1] if len(menu_session_info) > 1 else "freedraw"
     print("Room name: " + room_name)
-    #Fetch gamemode BEFORE creating umanager if joiner
+    
     if gamemode == "fetch":
         from network import FirebaseClient
         import uuid
         temp_client = FirebaseClient(room_id=room_name, user_id=str(uuid.uuid4())[:8])
         gamemode = temp_client.fetch_gamemode()
         print(f"[Game] Fetched gamemode from Firebase: {gamemode}")
+
+    #TODO host vs joiner value
+    #umanager = UserManager(room_name, gamemode=gamemode)
+
+    #umanager.firebase.push_gamemode(gamemode)
 
     in_lobby = True
 
@@ -66,6 +84,8 @@ async def main():
     umanager = UserManager(room_name, gamemode=gamemode)
     umanager.firebase.push_gamemode(gamemode)
     umanager.add_user(screen)
+
+    contest = ContestGame(umanager, screen, font) if gamemode == "contest" else None
 
     running = True
     clock = pygame.time.Clock()
@@ -116,20 +136,6 @@ async def main():
     chat_display_rect = pygame.Rect(905,   5, 250, 585)  # Message area above it
     chatroom_rect     = pygame.Rect(900,   0, 260, 640)
 
-    def draw_outlined_text(surface, text, font, pos, text_color, outline_color):
-        x, y = pos
-
-        # Render outline (offset in 8 directions)
-        outline_surface = font.render(text, True, outline_color)
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                if dx != 0 or dy != 0:
-                    surface.blit(outline_surface, (x + dx, y + dy))
-
-        # Render main text
-        text_surface = font.render(text, True, text_color)
-        surface.blit(text_surface, (x, y))
-
     try:
         while running:
             screen.fill(Color.PURPLE.value)
@@ -138,7 +144,13 @@ async def main():
             top_buttons.update()
             if menu_open:
                 tool_grid.update()
-            input_locked = umanager.is_input_locked()    
+            input_locked = umanager.is_input_locked()  
+            
+            if contest:
+                input_locked = contest.is_input_locked()
+            else:
+                input_locked = umanager.is_input_locked()
+  
             for event in events:
                 if event.type == pygame.QUIT:
                     running = False  # Use flag instead of SystemExit for cleaner web exit
@@ -154,6 +166,10 @@ async def main():
                     if not input_locked:
                         tool_grid.handle_events(event)
                     rgb_picker.handle_event(event)
+                
+                if contest:
+                    contest.handle_event(event)
+    
 
                 # Chat event handler
                 if event.type == pygame.MOUSEBUTTONDOWN:
@@ -169,9 +185,9 @@ async def main():
                         if chat_text.strip():
                             if umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
                                 umanager.check_guess(chat_text)
-                            chat_messages.append((umanager.firebase.user_id, chat_text))  
-                            
-                            umanager.firebase.push_chat_message(chat_text)                
+                            chat_messages.append((umanager.firebase.user_id, chat_text))  # Local display
+                            #TODO hide correct guesses. For now the game ends on a correct guess though.
+                            umanager.firebase.push_chat_message(chat_text)                 # Push to Firebase
                             chat_text = ""
                     elif event.key == pygame.K_BACKSPACE:
                         chat_text = chat_text[:-1]
@@ -196,32 +212,28 @@ async def main():
                 hovering_ui = hovering_ui or tool_grid.is_hovering_ui or rgb_picker.is_hovering()
 
             # Render
-            umanager.draw()
+            # Only draw local canvas during drawing phase
+            if not (contest and contest.is_input_locked()):
+                umanager.draw()
+            else:
+                # During rating — fill canvas area with white so promoted strokes draw clean
+                pygame.draw.rect(screen, Color.WHITE.value, pygame.Rect(0, 0, 640, 640))
+                
             pygame.draw.rect(screen, Color.PURPLE.value, all_button_rect)
             top_buttons.draw(screen)
 
             # Chat sidebar
             pygame.draw.rect(screen, Color.WHITE.value, chatroom_rect)
 
-            # Draw messages with word-wrap, most recent at the bottom
+            # Draw messages, most recent at the bottom
             line_height = 22
-            max_chat_width = chat_display_rect.width - 8  # small side padding
-
-            # Pre-compute wrapped lines for every message
-            all_wrapped = []
-            for uid, msg in chat_messages:
-                first_line = True
-                for wrapped_line in wrap_text(f"{uid}: {msg}", font, max_chat_width):
-                    all_wrapped.append((wrapped_line, first_line))
-                    first_line = False
-
-            # Only show as many lines as fit in the display area
             visible_lines = chat_display_rect.height // line_height
-            visible = all_wrapped[-visible_lines:]
+            recent_messages = chat_messages[-visible_lines:]
 
-            for i, (line, _) in enumerate(visible):
+            for i, (uid, msg) in enumerate(recent_messages):
+                line = f"{uid}: {msg}"
                 msg_surface = font.render(line, True, (0, 0, 0))
-                screen.blit(msg_surface, (chat_display_rect.x + 4, chat_display_rect.y + i * line_height))
+                screen.blit(msg_surface, (chat_display_rect.x, chat_display_rect.y + i * line_height))
 
             # Divider line between messages and input
             pygame.draw.line(screen, pygame.Color('gray'), (900, 595), (1160, 595), 2)
@@ -252,29 +264,21 @@ async def main():
 
             umanager.draw_cursor()
 
-
-            if umanager.i_am_drawer and umanager.current_word:
-                draw_outlined_text(
-                    screen,
-                    f"Draw: {umanager.current_word}",
-                    font,
-                    (10, 10),
-                    (255, 255, 255),
-                    (0, 0, 0)
-                )
-
+            if contest:
+                contest.draw()
+            elif umanager.i_am_drawer and umanager.current_word:
+                word_surface = font.render(f"Draw: {umanager.current_word}", True, (255, 255, 0))
+                screen.blit(word_surface, (10, 10))
             elif umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
-                draw_outlined_text(
-                    screen,
-                    "Guess the drawing!",
-                    font,
-                    (10, 10),
-                    (255, 255, 255),
-                    (0, 0, 0)
-                )
+                guess_surface = font.render("Guess the drawing!", True, (255, 255, 255))
+                screen.blit(guess_surface, (10, 10))
 
             # Update (includes Firebase push/pull)
             umanager.update(hovering_ui, events)
+
+            if contest:
+                contest.update()
+
 
             # Receive incoming chat messages from Firebase
             for uid, msg in getattr(umanager, 'incoming_chat', []):

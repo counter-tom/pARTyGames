@@ -31,7 +31,7 @@ class UserManager:
         self._last_presence_check = 0.0
         #Pictionary
         self.gamemode = gamemode
-        self.my_order = self.firebase.register_player_order()  
+        self.my_order = self.firebase.register_player_order()  #  Claim join slot
         self.game_state = {}
         self._game_state_check_interval = 3
         self._last_game_state_check = 0.0
@@ -70,11 +70,18 @@ class UserManager:
     def get_clear_command(self):
         user = self.get_active_user()
         if user is not None:
-            cmd = ClearCanvasCommand(user.canvas, self.firebase)
-            user.commander.execute(cmd)        
+            if self.gamemode == "contest":
+                #  Only clear local canvas and player's own contest strokes
+                user.canvas.clear()
+                print('usermanager get_clear_command() -> canvas.clear() called')
+                self.firebase.clear_contest_strokes(self.firebase.user_id)
+                print('usermanager get_clear_command() -> fb clear_contest_strokes() called')
+            else:
+                cmd = ClearCanvasCommand(user.canvas, self.firebase)
+                user.commander.execute(cmd)     
 
     def update(self, is_cursor_on_ui, events):
-        #Heartbeat 
+        # ── Heartbeat / presence check ────────────────────────────────────────
         now = time.time()
         if now - self._last_presence_check > self._presence_check_interval:
             self._last_presence_check = now
@@ -82,7 +89,7 @@ class UserManager:
                 self._fetching_players = True
                 threading.Thread(target=self._fetch_players_async, daemon=True).start()
 
-        #Incoming chat messages
+        # ── Incoming chat messages ────────────────────────────────────────────
         if self._pending_initial_messages:
             for msg_dict in self._pending_initial_messages:
                 self._on_incoming_message(msg_dict)
@@ -91,7 +98,7 @@ class UserManager:
         for msg_dict in self.firebase.pop_incoming_messages():
             self._on_incoming_message(msg_dict)
 
-        #Replay initial strokes on first update
+        # ── Replay initial strokes on first update ────────────────────────────
         if self._pending_initial_strokes:
             active_user = self.users.get(self.active_user_id)
             if active_user is not None:
@@ -103,7 +110,7 @@ class UserManager:
                     active_user.canvas._last_pushed_stroke = active_user.canvas.strokes[-1]
             self._pending_initial_strokes = []
 
-        #Active user update + stroke sync
+        # ── Active user update + stroke sync ─────────────────────────────────
         active_user = self.users.get(self.active_user_id)
         if active_user is not None:
             active_user.update(is_cursor_on_ui)
@@ -114,14 +121,20 @@ class UserManager:
                 latest = canvas.strokes[-1]
                 canvas._last_pushed_stroke = latest
                 if not latest.remote:
-                    self.firebase.push_stroke(latest, active_user.color)
+                    if self.gamemode == "contest":
+                        #  Contest strokes go under presence/{uid}/contest_strokes
+                        self.firebase.push_contest_stroke(latest, active_user.color)
+                    else:
+                        self.firebase.push_stroke(latest, active_user.color)
+
             for stroke_dict in self.firebase.pop_incoming_strokes():
                 stroke = deserialize_stroke(stroke_dict)
                 if active_user is not None:
                     if stroke.is_clear:
                         active_user.canvas.clear()
+                        print('usermanager update() -> clear() called')
                         active_user.canvas._last_pushed_stroke = None
-                    elif getattr(stroke, 'is_fill', False):  
+                    elif getattr(stroke, 'is_fill', False):  #  Safe check, defaults to False
                         from commands.fill_command import FillCommand
                         cmd = FillCommand(active_user.canvas, (stroke.fill_x, stroke.fill_y), stroke.fill_color)
                         cmd.do()
@@ -129,7 +142,7 @@ class UserManager:
                         cmd = DrawStrokeCommand(active_user.canvas, stroke)
                         cmd.do()
 
-        #Pictionary game state
+        # ── Pictionary game state (non-blocking) ──────────────────────────────
         if self.gamemode == "pictionary":
             now = time.time()
             if now - self._last_game_state_check > self._game_state_check_interval:
@@ -148,7 +161,7 @@ class UserManager:
         round_active = self.game_state.get("round_active", False)
         current_drawer = self.game_state.get("current_drawer")
 
-        print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")  
+        print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")  #  Temp
 
         self.i_am_drawer = (current_drawer == self.firebase.user_id)
 
@@ -168,7 +181,7 @@ class UserManager:
         else:
             self.firebase.leave_room()
             if self.gamemode == "pictionary":
-                self.reset_turn()             
+                self.reset_turn()  #                
 
     def _on_incoming_message(self, msg_dict: dict):
         """Called for every incoming chat message — override or hook in main."""
@@ -202,8 +215,9 @@ class UserManager:
         self.i_am_drawer = (drawer_uid == self.firebase.user_id)
         if self.i_am_drawer:
             self.current_word = word
-            print(f"[Game] My word is: {self.current_word}")  
+            print(f"[Game] My word is: {self.current_word}")  # 
             self.firebase.push_clear()
+            print('usermanager _start_new_round() -> firebase.push_clear() called')
 
     def check_guess(self, guess: str) -> bool:
         with self._game_state_lock:
@@ -213,6 +227,7 @@ class UserManager:
         if word and guess.strip().lower() == word.lower():
             print(f"[Game] Correct guess by {self.firebase.user_id}!")
             turn_index = game_state.get("turn_index", 0)
+            #  Push in background — don't block main thread
             threading.Thread(
                 target=self._end_round_async,
                 args=(turn_index + 1,),
@@ -225,7 +240,9 @@ class UserManager:
         self.firebase.push_game_state(next_turn_index, "", "")
         self.firebase.end_round()
         self.firebase.push_clear()
+        print('usermanager _end_round_async() fb push_clear() called')
         self.get_clear_command()
+        print('usermanager _end_round_async() get_clear_command called')
         
 
     def is_input_locked(self) -> bool:
@@ -259,10 +276,27 @@ class UserManager:
                 self.active_players      = players
                 self._last_player_count  = current_count
 
-            #reset turn index
+            #  Player count changed — reset turn index
             if self.gamemode == "pictionary" and current_count != last_count and last_count != 0:
                 print(f"[Game] Player count changed {last_count} → {current_count}, resetting turn index.")
                 self.firebase.reset_turn()
+            elif self.gamemode == "contest" and current_count != last_count and last_count != 0:
+                #  Contest restarts whenever anyone joins or leaves
+                print(f"[Game] Player count changed {last_count} → {current_count}, restarting contest.")
+                players = self.firebase.fetch_ordered_players()
+                if players and players[0] == self.firebase.user_id:
+                    # Only coordinator pushes the restart
+                    import random
+                    word = random.choice(self.firebase.FRUIT_POOL)
+                    self.firebase.push_contest_state({
+                        "phase":                "drawing",
+                        "current_word":         word,
+                        "phase_start_ts":       __import__('time').time(),
+                        "player_order":         players,
+                        "current_rating_index": 0
+                    })
+                    self.firebase.clear_contest_ratings(self.active_user_id)
+
         finally:
             self._fetching_players = False         
 
@@ -276,11 +310,11 @@ class UserManager:
 
         with self._game_state_lock:
             self.i_am_drawer = (current_drawer == self.firebase.user_id)
-            #sync current_word from Firebase for the new drawer
+            #  Always sync current_word from Firebase for the new drawer
             if self.i_am_drawer and round_active:
                 self.current_word = game_state.get("current_word", "")
             elif not self.i_am_drawer:
-                self.current_word = None  #Guessers never see the word
+                self.current_word = None  #  Guessers never see the word
 
         enough_players = len(players) >= 2
         print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")

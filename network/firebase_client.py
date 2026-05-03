@@ -75,7 +75,8 @@ class FirebaseClient:
         self._listener_thread = None
         self._incoming_messages = []  
 
-    # Connection 
+    # ── Connection ────────────────────────────────────────────────────────────
+
     def connect(self) -> bool:
         """
         Test connectivity to Firebase. Returns True if reachable.
@@ -94,7 +95,7 @@ class FirebaseClient:
             print(f"[Network] Could not reach Firebase: {e}")
             return False
 
-    #Listener
+    # ── Listener ──────────────────────────────────────────────────────────────
 
     def start_listener(self):
         """
@@ -137,7 +138,10 @@ class FirebaseClient:
             if not data:
                 return
 
-            if "chat" in path:
+            #  Split path into segments so "contest_strokes" doesn't match "strokes"
+            segments = path.strip("/").split("/")
+
+            if "chat" in segments:
                 if isinstance(data, dict):
                     if "message" in data:
                         self._queue_message_if_foreign(data)
@@ -146,13 +150,11 @@ class FirebaseClient:
                             if isinstance(msg, dict):
                                 self._queue_message_if_foreign(msg)
 
-            elif "strokes" in path:
+            elif "strokes" in segments and "contest_strokes" not in segments:  #  Exact segment match
                 if isinstance(data, dict):
                     if "dots" in data or "is_fill" in data:
-                        # ✅ Single stroke or single fill — queue directly
                         self._queue_if_foreign(data)
                     else:
-                        # Bulk dict of strokes/fills
                         for stroke in data.values():
                             if isinstance(stroke, dict):
                                 self._queue_if_foreign(stroke)
@@ -175,9 +177,15 @@ class FirebaseClient:
 
     def _heartbeat_loop(self):
         while True:
+            #  Write only ts subfield — don't overwrite the whole presence node
             self._fb_set(
-                f"rooms/{self.room_id}/presence/{self.user_id}",
-                {"uid": self.user_id, "ts": time.time()}
+                f"rooms/{self.room_id}/presence/{self.user_id}/ts",
+                time.time()
+            )
+            #  Also update uid subfield on first write
+            self._fb_set(
+                f"rooms/{self.room_id}/presence/{self.user_id}/uid",
+                self.user_id
             )
             time.sleep(self.HEARTBEAT_INTERVAL)
 
@@ -198,10 +206,6 @@ class FirebaseClient:
             return []
         
     def register_player_order(self) -> int:
-        """
-        Claims the next join order slot for this player.
-        Returns the integer slot claimed (0, 1, 2...).
-        """
         purl = f"{DB_URL}/rooms/{self.room_id}/presence.json"
         try:
             response = requests.get(purl, timeout=5)
@@ -210,13 +214,11 @@ class FirebaseClient:
         except:
             order = 0
 
-        url = f"{DB_URL}/rooms/{self.room_id}/presence/{self.user_id}.json"
-        requests.put(url, json={
-            "uid":   self.user_id,
-            "ts":    time.time(),
-            "order": order
-        }, timeout=5)
-        return order    
+        #  Write each field separately — don't overwrite the whole node
+        self._fb_set(f"rooms/{self.room_id}/presence/{self.user_id}/uid", self.user_id)
+        self._fb_set(f"rooms/{self.room_id}/presence/{self.user_id}/ts", time.time())
+        self._fb_set(f"rooms/{self.room_id}/presence/{self.user_id}/order", order)
+        return order
 
     def leave_room(self):
         self._fb_delete(f"rooms/{self.room_id}/presence/{self.user_id}")
@@ -225,11 +227,12 @@ class FirebaseClient:
         threading.Thread(
             target=self._fb_set,
             args=(f"rooms/{self.room_id}", {}),
-            daemon=False  # ✅ Must complete before process dies
+            daemon=False  #  Must complete before process dies
         ).start()
 
 
-    #Incoming strokes 
+    # ── Incoming strokes ──────────────────────────────────────────────────────
+
     def pop_incoming_strokes(self) -> list:
         """
         Return and clear all queued incoming strokes from other users.
@@ -259,7 +262,7 @@ class FirebaseClient:
             print(f"[Network] fetch_strokes error: {e}")
             return []
 
-    #Outgoing strokes
+    # ── Outgoing strokes ──────────────────────────────────────────────────────
 
     def push_stroke(self, stroke, color):
         """
@@ -301,6 +304,8 @@ class FirebaseClient:
             "ts": time.time()
         }
 
+    # ── Clear ─────────────────────────────────────────────────────────────────
+
     # Chat functions
     def push_chat_message(self, message: str):
         """Push a chat message to Firebase."""
@@ -335,8 +340,7 @@ class FirebaseClient:
             self._incoming_messages.clear()
         return messages
     
-    #TODO add more stuff
-
+    #TODO Topic draw pool
     FRUIT_POOL = [
         "apple", "banana", "cherry", "grape", "mango",
         "orange", "peach", "pear", "pineapple", "strawberry",
@@ -391,7 +395,7 @@ class FirebaseClient:
 
     ]
 
-    # Room setup 
+    # ── Room setup ────────────────────────────────────────────────────────────────
 
     def push_gamemode(self, gamemode: str):
         """Host writes gamemode when creating the room."""
@@ -408,7 +412,7 @@ class FirebaseClient:
             print(f"[Network] fetch_gamemode error: {e}")
             return "freedraw"
 
-    # Presence order
+    # ── Presence order ────────────────────────────────────────────────────────────
 
     def register_player_order(self):
         """
@@ -427,7 +431,7 @@ class FirebaseClient:
         requests.put(url, json={"uid": self.user_id, "ts": time.time(), "order": order}, timeout=5)
         return order
 
-    # Game state 
+    # ── Game state ────────────────────────────────────────────────────────────────
 
     def push_game_state(self, turn_index: int, drawer_uid: str, word: str):
         self._fb_set(f"rooms/{self.room_id}/game_state", {
@@ -474,6 +478,34 @@ class FirebaseClient:
         except Exception as e:
             print(f"[Network] fetch_ordered_players error: {e}")
             return []
+#########################
+    # def _handle_event(self, raw: str):
+    #     """Parse an SSE payload and queue any foreign strokes or messages."""
+    #     try:
+    #         payload = json.loads(raw)
+    #         path = payload.get("path", "")
+    #         data = payload.get("data")
+    #         if not data:
+    #             return
+
+    #         if "chat" in path:
+    #             if isinstance(data, dict):
+    #                 if "message" in data:
+    #                     self._queue_message_if_foreign(data)
+    #                 else:
+    #                     for msg in data.values():
+    #                         if isinstance(msg, dict):
+    #                             self._queue_message_if_foreign(msg)
+    #         else:
+    #             if isinstance(data, dict):
+    #                 if "dots" in data:
+    #                     self._queue_if_foreign(data)
+    #                 else:
+    #                     for stroke in data.values():
+    #                         if isinstance(stroke, dict):
+    #                             self._queue_if_foreign(stroke)
+    #     except Exception:
+    #         pass
 
     def _queue_message_if_foreign(self, msg: dict):
         """Queue chat messages from other users."""
@@ -481,6 +513,8 @@ class FirebaseClient:
             with self._lock:
                 self._incoming_messages.append(msg)    
 
+
+#########################
 
     def push_clear(self):
     # Wipe all strokes from DB
@@ -495,6 +529,7 @@ class FirebaseClient:
             args=(f"rooms/{self.room_id}/strokes", self._white_stroke()),
             daemon=True
         ).start()
+        print('firebase_client.py push_clear() call')
 
     def push_fill(self, x: int, y: int, color):
         if hasattr(color, "value"):
@@ -507,7 +542,7 @@ class FirebaseClient:
             "is_fill": True,
             "fill_x":  x,
             "fill_y":  y,
-            "color":   rgb,  # ✅ Already a list, Firebase should store as array
+            "color":   rgb,  #  Already a list, Firebase should store as array
             "ts":      time.time()
         }
         threading.Thread(
@@ -528,12 +563,13 @@ class FirebaseClient:
     
     def _fb_set(self, path: str, data):
         url = f"{DB_URL}/{path}.json"
+        #print(f"[Firebase SET] {path} → {str(data)[:80]}")
         try:
             requests.put(url, json=data, timeout=5)
         except Exception as e:
             print(f"[Network] Set error: {e}")        
 
-    # Firebase REST 
+    # ── Firebase REST ─────────────────────────────────────────────────────────
 
     def _fb_push(self, path: str, data: dict):
         url = f"{DB_URL}/{path}.json"
@@ -548,4 +584,131 @@ class FirebaseClient:
             requests.delete(url, timeout=5)
         except Exception as e:
             print(f"[Network] Delete error: {e}")
+
+
+    # ── Contest gamemode ──────────────────────────────────────────────────────
+
+    def push_contest_state(self, state: dict):
+        """Overwrite the entire contest game_state node."""
+        self._fb_set(f"rooms/{self.room_id}/game_state", state)
+
+    def fetch_contest_state(self) -> dict:
+        """Fetch the contest game_state node."""
+        url = f"{DB_URL}/rooms/{self.room_id}/game_state.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            return data if isinstance(data, dict) else {}
+        except Exception as e:
+            print(f"[Network] fetch_contest_state error: {e}")
+            return {}
+
+    def push_contest_stroke(self, stroke, color):
+        """
+        Push a stroke under the player's own presence entry.
+        Path: rooms/{room}/presence/{uid}/contest_strokes/
+        """
+        if hasattr(color, "value"):
+            rgb = list(color.value)
+        else:
+            rgb = list(color)
+
+        dots = [
+            {"x": dot.x, "y": dot.y, "size": dot.surf.get_width()}
+            for dot in stroke.dots
+        ]
+        data = {
+            "uid":   self.user_id,
+            "color": rgb,
+            "dots":  dots,
+            "ts":    time.time()
+        }
+        threading.Thread(
+            target=self._fb_push,
+            args=(f"rooms/{self.room_id}/presence/{self.user_id}/contest_strokes", data),
+            daemon=True
+        ).start()
+        print('Pushed Contest stroke fbclient push_contest_stroke()')
+
+    def fetch_contest_strokes(self, uid: str) -> list:
+        """
+        Fetch all contest strokes for a given player.
+        Returns a list of stroke dicts.
+        """
+        print('fetch_contest_strokes call')
+        url = f"{DB_URL}/rooms/{self.room_id}/presence/{uid}/contest_strokes.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            if not data or not isinstance(data, dict):
+                print('fetch_contest_strokes returned empty list')
+                return []
+            return list(data.values())
+        except Exception as e:
+            print(f"[Network] fetch_contest_strokes error: {e}")
+            return []
+
+    def push_contest_rating(self, rated_uid: str, rater_uid: str, score: int):
+        """
+        Push a rating.
+        Path: rooms/{room}/ratings/{rated_uid}/{rater_uid} = score
+        """
+        url = f"{DB_URL}/rooms/{self.room_id}/ratings/{rated_uid}/{rater_uid}.json"
+        try:
+            requests.put(url, json=score, timeout=5)
+        except Exception as e:
+            print(f"[Network] push_contest_rating error: {e}")
+
+    def fetch_all_contest_ratings(self) -> dict:
+        """
+        Fetch all ratings.
+        Returns { rated_uid: { rater_uid: score } }
+        """
+        url = f"{DB_URL}/rooms/{self.room_id}/ratings.json"
+        try:
+            response = requests.get(url, timeout=5)
+            data = response.json()
+            return data if isinstance(data, dict) else {}
+        except Exception as e:
+            print(f"[Network] fetch_all_contest_ratings error: {e}")
+            return {}
+
+    def clear_contest_ratings(self, uid: str):
+        """Wipe all ratings at the start of a new contest round."""
+        print(f"[Network] Clearing contest strokes for {uid}")
+        threading.Thread(
+            target=self._fb_set,
+            args=(f"rooms/{self.room_id}/ratings", {}),
+            daemon=True
+        ).start()       
+
+    def clear_contest_strokes(self, uid: str):
+        """Clear contest strokes for a specific player."""
+        print('fb client.py clear_contest_strokes() called')
+        threading.Thread(
+            target=self._fb_set,
+            args=(f"rooms/{self.room_id}/presence/{uid}/contest_strokes", {}),
+            daemon=True
+        ).start()     
+        
+
+    def promote_contest_strokes_to_shared(self, uid: str):
+        """
+        Fetch a player's contest strokes and write them synchronously
+        to the shared strokes node so they're there before state changes.
+        """
+        strokes = self.fetch_contest_strokes(uid)
+        if not strokes:
+            print(f"[Network] No contest strokes found for {uid}")
+            return
+        print(f"[Network] Promoting {len(strokes)} strokes for {uid} to shared node.")
+        for stroke_dict in strokes:
+            #  Synchronous push — blocks until each stroke lands
+            self._fb_push(f"rooms/{self.room_id}/strokes", stroke_dict)
+
+    def clear_shared_strokes(self):
+        """Wipe all shared strokes — used between rating intervals."""
+        print('fb client.py clear_shared_strokes() called')
+        self._fb_set(f"rooms/{self.room_id}/strokes", {})    
+        
 

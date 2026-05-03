@@ -1,11 +1,11 @@
 import pygame
 
 class FillCommand:
-    def __init__(self, canvas, start_pos, fill_color, firebase=None):  # ✅ Add firebase=None
+    def __init__(self, canvas, start_pos, fill_color, firebase=None):  #  Add firebase=None
         self.canvas = canvas
         self.start_pos = start_pos
         self.fill_color = fill_color
-        self.firebase = firebase  # ✅ Store it
+        self.firebase = firebase  #  Store it
         self.old_strokes = []
         self.old_surface = None
 
@@ -15,7 +15,7 @@ class FillCommand:
         self.flood_fill(self.canvas.surface, self.start_pos, self.fill_color)
         self.canvas.makeDirty()
 
-        # ✅ Use self.firebase instead of self.canvas.firebase
+        #  Use self.firebase instead of self.canvas.firebase
         if self.firebase is not None:
             self.firebase.push_fill(
                 self.start_pos[0],
