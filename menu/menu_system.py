@@ -131,7 +131,7 @@ async def menu_start_async() -> list:
     active         = False
     room_name      = "room1"
 
-    host_error_msg = ""  # ✅ Shown when room already exists
+    host_error_msg = ""  
 
     #Gamemode dropdown (HOST only) 
     selected_gamemode_index = 0
@@ -214,7 +214,7 @@ async def menu_start_async() -> list:
                         else:
                             text += event.unicode
                             room_name = text
-                            host_error_msg = ""  # ✅ Clear error on new input
+                            host_error_msg = ""  
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     if dropdown_rect.collidepoint(event.pos):
@@ -245,7 +245,7 @@ async def menu_start_async() -> list:
 
                     if start_button.collidepoint(event.pos):
                         if check_room_exists(room_name):
-                            host_error_msg = "Error — Room already exists!"  # ✅ Show error
+                            host_error_msg = "Error — Room already exists!"  
                         else:
                             menu_session_info[0] = room_name
                             menu_session_info[1] = GAMEMODES[selected_gamemode_index]
@@ -282,7 +282,7 @@ async def menu_start_async() -> list:
                             menu_session_info[0] = selected_room
                             menu_session_info[1] = "fetch"
                             print(f"[Menu] Joining room: {selected_room}")
-                            done = True  # ✅ Single click selects and joins
+                            done = True 
 
         #Rendering 
 

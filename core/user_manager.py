@@ -31,7 +31,7 @@ class UserManager:
         self._last_presence_check = 0.0
         #Pictionary
         self.gamemode = gamemode
-        self.my_order = self.firebase.register_player_order()  # ✅ Claim join slot
+        self.my_order = self.firebase.register_player_order()  
         self.game_state = {}
         self._game_state_check_interval = 3
         self._last_game_state_check = 0.0
@@ -121,7 +121,7 @@ class UserManager:
                     if stroke.is_clear:
                         active_user.canvas.clear()
                         active_user.canvas._last_pushed_stroke = None
-                    elif getattr(stroke, 'is_fill', False):  # ✅ Safe check, defaults to False
+                    elif getattr(stroke, 'is_fill', False):  
                         from commands.fill_command import FillCommand
                         cmd = FillCommand(active_user.canvas, (stroke.fill_x, stroke.fill_y), stroke.fill_color)
                         cmd.do()
@@ -148,7 +148,7 @@ class UserManager:
         round_active = self.game_state.get("round_active", False)
         current_drawer = self.game_state.get("current_drawer")
 
-        print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")  # ✅ Temp
+        print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")  
 
         self.i_am_drawer = (current_drawer == self.firebase.user_id)
 
@@ -168,7 +168,7 @@ class UserManager:
         else:
             self.firebase.leave_room()
             if self.gamemode == "pictionary":
-                self.reset_turn()  # ✅               
+                self.reset_turn()             
 
     def _on_incoming_message(self, msg_dict: dict):
         """Called for every incoming chat message — override or hook in main."""
@@ -202,7 +202,7 @@ class UserManager:
         self.i_am_drawer = (drawer_uid == self.firebase.user_id)
         if self.i_am_drawer:
             self.current_word = word
-            print(f"[Game] My word is: {self.current_word}")  # ✅
+            print(f"[Game] My word is: {self.current_word}")  
             self.firebase.push_clear()
 
     def check_guess(self, guess: str) -> bool:
@@ -213,7 +213,6 @@ class UserManager:
         if word and guess.strip().lower() == word.lower():
             print(f"[Game] Correct guess by {self.firebase.user_id}!")
             turn_index = game_state.get("turn_index", 0)
-            # ✅ Push in background — don't block main thread
             threading.Thread(
                 target=self._end_round_async,
                 args=(turn_index + 1,),

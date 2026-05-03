@@ -14,6 +14,24 @@ from ui.tool_grid import ToolGrid
 
 #TODO fix chat messages. Chat messages need to wrap around to the next line.
 
+def wrap_text(text, font, max_width):
+    """Break `text` into a list of lines that each fit within `max_width` pixels."""
+    words = text.split(' ')
+    lines = []
+    current = ""
+    for word in words:
+        test = f"{current} {word}".strip()
+        if font.size(test)[0] <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word  # start a new line with this word
+    if current:
+        lines.append(current)
+    return lines
+
+
 async def main():
     #Begin Menu
     menu_session_info = await menu_start_async()
@@ -98,6 +116,20 @@ async def main():
     chat_display_rect = pygame.Rect(905,   5, 250, 585)  # Message area above it
     chatroom_rect     = pygame.Rect(900,   0, 260, 640)
 
+    def draw_outlined_text(surface, text, font, pos, text_color, outline_color):
+        x, y = pos
+
+        # Render outline (offset in 8 directions)
+        outline_surface = font.render(text, True, outline_color)
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx != 0 or dy != 0:
+                    surface.blit(outline_surface, (x + dx, y + dy))
+
+        # Render main text
+        text_surface = font.render(text, True, text_color)
+        surface.blit(text_surface, (x, y))
+
     try:
         while running:
             screen.fill(Color.PURPLE.value)
@@ -171,15 +203,25 @@ async def main():
             # Chat sidebar
             pygame.draw.rect(screen, Color.WHITE.value, chatroom_rect)
 
-            # Draw messages, most recent at the bottom
+            # Draw messages with word-wrap, most recent at the bottom
             line_height = 22
-            visible_lines = chat_display_rect.height // line_height
-            recent_messages = chat_messages[-visible_lines:]
+            max_chat_width = chat_display_rect.width - 8  # small side padding
 
-            for i, (uid, msg) in enumerate(recent_messages):
-                line = f"{uid}: {msg}"
+            # Pre-compute wrapped lines for every message
+            all_wrapped = []
+            for uid, msg in chat_messages:
+                first_line = True
+                for wrapped_line in wrap_text(f"{uid}: {msg}", font, max_chat_width):
+                    all_wrapped.append((wrapped_line, first_line))
+                    first_line = False
+
+            # Only show as many lines as fit in the display area
+            visible_lines = chat_display_rect.height // line_height
+            visible = all_wrapped[-visible_lines:]
+
+            for i, (line, _) in enumerate(visible):
                 msg_surface = font.render(line, True, (0, 0, 0))
-                screen.blit(msg_surface, (chat_display_rect.x, chat_display_rect.y + i * line_height))
+                screen.blit(msg_surface, (chat_display_rect.x + 4, chat_display_rect.y + i * line_height))
 
             # Divider line between messages and input
             pygame.draw.line(screen, pygame.Color('gray'), (900, 595), (1160, 595), 2)
@@ -210,12 +252,26 @@ async def main():
 
             umanager.draw_cursor()
 
+
             if umanager.i_am_drawer and umanager.current_word:
-                word_surface = font.render(f"Draw: {umanager.current_word}", True, (255, 255, 0))
-                screen.blit(word_surface, (10, 10))
+                draw_outlined_text(
+                    screen,
+                    f"Draw: {umanager.current_word}",
+                    font,
+                    (10, 10),
+                    (255, 255, 255),
+                    (0, 0, 0)
+                )
+
             elif umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
-                guess_surface = font.render("Guess the drawing!", True, (255, 255, 255))
-                screen.blit(guess_surface, (10, 10))
+                draw_outlined_text(
+                    screen,
+                    "Guess the drawing!",
+                    font,
+                    (10, 10),
+                    (255, 255, 255),
+                    (0, 0, 0)
+                )
 
             # Update (includes Firebase push/pull)
             umanager.update(hovering_ui, events)
