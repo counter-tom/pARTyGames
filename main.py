@@ -20,6 +20,13 @@ async def main():
     room_name = menu_session_info[0]
     gamemode  = menu_session_info[1] if len(menu_session_info) > 1 else "freedraw"
     print("Room name: " + room_name)
+    # ✅ Fetch gamemode BEFORE creating umanager if joiner
+    if gamemode == "fetch":
+        from network import FirebaseClient
+        import uuid
+        temp_client = FirebaseClient(room_id=room_name, user_id=str(uuid.uuid4())[:8])
+        gamemode = temp_client.fetch_gamemode()
+        print(f"[Game] Fetched gamemode from Firebase: {gamemode}")
 
     #TODO host vs joiner value
     #umanager = UserManager(room_name, gamemode=gamemode)
@@ -45,7 +52,6 @@ async def main():
 
     umanager = UserManager(room_name, gamemode=gamemode)
     umanager.firebase.push_gamemode(gamemode)
-    
     umanager.add_user(screen)
 
     running = True

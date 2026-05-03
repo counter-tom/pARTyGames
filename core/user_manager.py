@@ -74,8 +74,10 @@ class UserManager:
         # ── Heartbeat / presence check ────────────────────────────────────────
         now = time.time()
         if now - self._last_presence_check > self._presence_check_interval:
-            self.active_players = self.firebase.fetch_active_players()
             self._last_presence_check = now
+            if not self._fetching_players:
+                self._fetching_players = True
+                threading.Thread(target=self._fetch_players_async, daemon=True).start()
 
         # ── Incoming chat messages ────────────────────────────────────────────
         if self._pending_initial_messages:
@@ -155,7 +157,7 @@ class UserManager:
                     else:
                         cmd = DrawStrokeCommand(active_user.canvas, stroke)
                         cmd.do()
-                        
+
         #Pictionary game state update
     def _evaluate_game_state(self):
         players = self.firebase.fetch_ordered_players()
@@ -217,15 +219,25 @@ class UserManager:
             self.firebase.push_clear()
 
     def check_guess(self, guess: str) -> bool:
-        """Call this when a non-drawer submits a chat message."""
-        word = self.game_state.get("current_word", "")
+        with self._game_state_lock:
+            game_state = dict(self.game_state)
+        word = game_state.get("current_word", "")
+        print(f"[Game] Checking guess: '{guess}' against word: '{word}'")
         if word and guess.strip().lower() == word.lower():
             print(f"[Game] Correct guess by {self.firebase.user_id}!")
-            turn_index = self.game_state.get("turn_index", 0)
-            self.firebase.push_game_state(turn_index + 1, "", "")  # ✅ Advance turn
-            self.firebase.end_round()
+            turn_index = game_state.get("turn_index", 0)
+            # ✅ Push in background — don't block main thread
+            threading.Thread(
+                target=self._end_round_async,
+                args=(turn_index + 1,),
+                daemon=True
+            ).start()
             return True
         return False
+
+    def _end_round_async(self, next_turn_index: int):
+        self.firebase.push_game_state(next_turn_index, "", "")
+        self.firebase.end_round()
 
     def is_input_locked(self) -> bool:
         """Uses cached players — no network call."""
@@ -248,19 +260,32 @@ class UserManager:
         finally:
             self._fetching_game_state = False
 
+    def _fetch_players_async(self):
+        try:
+            players = self.firebase.fetch_active_players()
+            with self._game_state_lock:
+                self.active_players = players
+        finally:
+            self._fetching_players = False            
+
     def _evaluate_game_state_cached(self):
-        """Uses cached players — safe to call from background thread."""
         with self._game_state_lock:
-            players        = list(self._ordered_players_cache)
-            game_state     = dict(self.game_state)
+            players    = list(self._ordered_players_cache)
+            game_state = dict(self.game_state)
 
-        enough_players  = len(players) >= 2
-        round_active    = game_state.get("round_active", False)
-        current_drawer  = game_state.get("current_drawer")
+        current_drawer = game_state.get("current_drawer")
+        round_active   = game_state.get("round_active", False)
 
+        with self._game_state_lock:
+            self.i_am_drawer = (current_drawer == self.firebase.user_id)
+            # ✅ Always sync current_word from Firebase for the new drawer
+            if self.i_am_drawer and round_active:
+                self.current_word = game_state.get("current_word", "")
+            elif not self.i_am_drawer:
+                self.current_word = None  # ✅ Guessers never see the word
+
+        enough_players = len(players) >= 2
         print(f"[Game] players={players}, enough={enough_players}, round_active={round_active}, drawer={current_drawer}, me={self.firebase.user_id}")
-
-        self.i_am_drawer = (current_drawer == self.firebase.user_id)
 
         if enough_players and not round_active and players and players[0] == self.firebase.user_id:
             self._start_new_round(players)
