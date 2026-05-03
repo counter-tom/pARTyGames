@@ -41,6 +41,7 @@ class UserManager:
         self._ordered_players_cache = []
         self._fetching_game_state = False
         self._fetching_players = False
+        self._last_player_count = 0
         
 
     def get_active_user(self):
@@ -157,13 +158,17 @@ class UserManager:
     def get_player_count(self) -> int:
         return len(self.active_players)
 
+
+
     def on_exit(self):
-        active = self.firebase.fetch_active_players()  # ✅ Fresh fetch
+        active = self.firebase.fetch_active_players()
         if len(active) <= 1:
             print("[Network] Last player leaving — clearing room.")
             self.firebase.clear_room()
         else:
-            self.firebase.leave_room()                    
+            self.firebase.leave_room()
+            if self.gamemode == "pictionary":
+                self.reset_turn()  # ✅               
 
     def _on_incoming_message(self, msg_dict: dict):
         """Called for every incoming chat message — override or hook in main."""
@@ -249,9 +254,18 @@ class UserManager:
         try:
             players = self.firebase.fetch_active_players()
             with self._game_state_lock:
-                self.active_players = players
+                current_count = len(players)
+                last_count    = self._last_player_count
+
+                self.active_players      = players
+                self._last_player_count  = current_count
+
+            # ✅ Player count changed — reset turn index
+            if self.gamemode == "pictionary" and current_count != last_count and last_count != 0:
+                print(f"[Game] Player count changed {last_count} → {current_count}, resetting turn index.")
+                self.firebase.reset_turn()
         finally:
-            self._fetching_players = False            
+            self._fetching_players = False         
 
     def _evaluate_game_state_cached(self):
         with self._game_state_lock:

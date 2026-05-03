@@ -401,6 +401,11 @@ class FirebaseClient:
         except Exception as e:
             print(f"[Network] fetch_game_state error: {e}")
             return {}
+        
+    def reset_turn(self):
+        """Reset turn index to 0 and end the current round."""
+        self._fb_set(f"rooms/{self.room_id}/game_state/turn_index", 0)
+        self.end_round()        
 
     def end_round(self):
         """Clear word, mark round inactive. turn_index increment handled by new round start."""
