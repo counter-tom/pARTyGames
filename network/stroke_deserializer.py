@@ -21,8 +21,24 @@ class _RawColor:
 
 
 def deserialize_stroke(stroke_dict: dict) -> Stroke:
-    r, g, b = stroke_dict["color"]
-    color = _RawColor(r, g, b)
+    if stroke_dict.get("is_fill"):
+            s = Stroke([], remote=True)
+            s.is_fill = True
+            s.fill_x  = stroke_dict["fill_x"]
+            s.fill_y  = stroke_dict["fill_y"]
+
+            # ✅ Firebase may return color as {0: r, 1: g, 2: b} instead of [r, g, b]
+            color = stroke_dict["color"]
+            if isinstance(color, dict):
+                color = [color[k] for k in sorted(color.keys())]
+            r, g, b = color
+            s.fill_color = (r, g, b)
+            return s
+    
+    color = stroke_dict["color"]
+    if isinstance(color, dict):
+        color = [color[k] for k in sorted(color.keys())]
+    r, g, b = color
     dots = []
     for dot_data in stroke_dict.get("dots", []):
         size = int(dot_data["size"])

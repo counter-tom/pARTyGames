@@ -147,11 +147,13 @@ class FirebaseClient:
                             if isinstance(msg, dict):
                                 self._queue_message_if_foreign(msg)
 
-            elif "strokes" in path:  # ✅ Only process strokes if path says strokes
+            elif "strokes" in path:
                 if isinstance(data, dict):
-                    if "dots" in data:
+                    if "dots" in data or "is_fill" in data:
+                        # ✅ Single stroke or single fill — queue directly
                         self._queue_if_foreign(data)
                     else:
+                        # Bulk dict of strokes/fills
                         for stroke in data.values():
                             if isinstance(stroke, dict):
                                 self._queue_if_foreign(stroke)
@@ -473,6 +475,27 @@ class FirebaseClient:
             args=(f"rooms/{self.room_id}/strokes", self._white_stroke()),
             daemon=True
         ).start()
+
+    def push_fill(self, x: int, y: int, color):
+        if hasattr(color, "value"):
+            rgb = list(color.value)
+        else:
+            rgb = list(color)
+
+        data = {
+            "uid":     self.user_id,
+            "is_fill": True,
+            "fill_x":  x,
+            "fill_y":  y,
+            "color":   rgb,  # ✅ Already a list, Firebase should store as array
+            "ts":      time.time()
+        }
+        threading.Thread(
+            target=self._fb_push,
+            args=(f"rooms/{self.room_id}/strokes", data),
+            daemon=True
+        ).start()
+
     #This is an adhoc way to clear other users' canvasses.    
     def _white_stroke(self) -> dict:
         return {

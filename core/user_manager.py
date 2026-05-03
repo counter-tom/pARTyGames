@@ -41,6 +41,7 @@ class UserManager:
         self._ordered_players_cache = []
         self._fetching_game_state = False
         self._fetching_players = False
+        
 
     def get_active_user(self):
         return self.users.get(self.active_user_id)
@@ -52,6 +53,7 @@ class UserManager:
 
         self.users[user_id] = User(screen, user_id, color)
         self.master.register(user_id, self.users[user_id].canvas)
+        self.users[user_id].cursor.firebase = self.firebase
 
 
     def draw(self):
@@ -104,23 +106,24 @@ class UserManager:
         active_user = self.users.get(self.active_user_id)
         if active_user is not None:
             active_user.update(is_cursor_on_ui)
-
             canvas = active_user.canvas
             if not hasattr(canvas, '_last_pushed_stroke'):
                 canvas._last_pushed_stroke = None
-
             if canvas.strokes and canvas.strokes[-1] is not canvas._last_pushed_stroke:
                 latest = canvas.strokes[-1]
                 canvas._last_pushed_stroke = latest
                 if not latest.remote:
                     self.firebase.push_stroke(latest, active_user.color)
-
             for stroke_dict in self.firebase.pop_incoming_strokes():
                 stroke = deserialize_stroke(stroke_dict)
                 if active_user is not None:
                     if stroke.is_clear:
                         active_user.canvas.clear()
                         active_user.canvas._last_pushed_stroke = None
+                    elif getattr(stroke, 'is_fill', False):  # ✅ Safe check, defaults to False
+                        from commands.fill_command import FillCommand
+                        cmd = FillCommand(active_user.canvas, (stroke.fill_x, stroke.fill_y), stroke.fill_color)
+                        cmd.do()
                     else:
                         cmd = DrawStrokeCommand(active_user.canvas, stroke)
                         cmd.do()
@@ -136,27 +139,6 @@ class UserManager:
                         target=self._fetch_game_state_async,
                         daemon=True
                     ).start()
-
-        active_user = self.users.get(self.active_user_id)
-        if active_user is not None:
-            active_user.update(is_cursor_on_ui)
-            canvas = active_user.canvas
-            if not hasattr(canvas, '_last_pushed_stroke'):
-                canvas._last_pushed_stroke = None
-            if canvas.strokes and canvas.strokes[-1] is not canvas._last_pushed_stroke:
-                latest = canvas.strokes[-1]
-                canvas._last_pushed_stroke = latest
-                if not latest.remote:
-                    self.firebase.push_stroke(latest, active_user.color)
-            for stroke_dict in self.firebase.pop_incoming_strokes():
-                stroke = deserialize_stroke(stroke_dict)
-                if active_user is not None:
-                    if stroke.is_clear:
-                        active_user.canvas.clear()
-                        active_user.canvas._last_pushed_stroke = None
-                    else:
-                        cmd = DrawStrokeCommand(active_user.canvas, stroke)
-                        cmd.do()
 
         #Pictionary game state update
     def _evaluate_game_state(self):

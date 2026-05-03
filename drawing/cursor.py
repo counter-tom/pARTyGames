@@ -10,7 +10,7 @@ from drawing.stroke import Stroke
 
 
 class Cursor:
-    def __init__(self, screen, current_stroke, canvas, commander, color):
+    def __init__(self, screen, current_stroke, canvas, commander, color, firebase=None):
         self.screen = screen
         self.current_stroke = current_stroke
         self.canvas = canvas
@@ -25,6 +25,7 @@ class Cursor:
         self.was_mouse_down = False
         self.line_start = None
         self.line_preview = []
+        self.firebase = firebase  # ✅ Add this
 
     def execute_command(self, command_class, *args):
         self.commander.execute(command_class(self.canvas, *args))
@@ -102,7 +103,8 @@ class Cursor:
 
     def handle_bucket(self, mouse_down, mouse_pos):
         if mouse_down and not self.was_mouse_down:
-            self.execute_command(FillCommand, mouse_pos, self._current_rgb())
+            cmd = FillCommand(self.canvas, mouse_pos, self._current_rgb(), firebase=self.firebase)
+            self.commander.execute(cmd)
 
     def handle_line(self, mouse_down, mouse_pos):
         if mouse_down and not self.was_mouse_down:
