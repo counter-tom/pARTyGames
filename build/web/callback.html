@@ -29,9 +29,8 @@
 <body>
   <div class="spinner"></div>
   <p>Completing login...</p>
-
   <script>
-    (function () {
+    (async function () {
       const hash   = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       const token  = params.get("access_token");
@@ -42,10 +41,25 @@
         return;
       }
 
-      // Store token so index.html picks it up via the storage event
-      localStorage.setItem("discord_token", token);
+      try {
+        const res  = await fetch("https://discord.com/api/users/@me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const user = await res.json();
+        const avatar_url = user.avatar
+          ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
+          : "";
+        const userData = {
+          id:         user.id,
+          username:   user.username,
+          avatar_url: avatar_url
+        };
+        localStorage.setItem("discord_user", JSON.stringify(userData));
+        localStorage.setItem("discord_token", token);
+      } catch (err) {
+        console.error("Failed to fetch Discord user:", err);
+      }
 
-      // Redirect back to main page
       window.location.href = "/";
     })();
   </script>

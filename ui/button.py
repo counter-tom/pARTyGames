@@ -1,6 +1,5 @@
 import pygame
-from core import Color
- 
+from core import Color 
 class Button:
     def __init__(self, text, coords, action, screen, font):
         self.screen = screen

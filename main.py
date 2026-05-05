@@ -1,28 +1,39 @@
 import asyncio  # Required for web
+import sys
 import pygame
-from CapstoneQuillxo.commands import ClearCanvasCommand
-from CapstoneQuillxo.core import UserManager
-from CapstoneQuillxo.core.color import Color, Tool
-from CapstoneQuillxo.ui import ButtonManager
-from CapstoneQuillxo.ui.rgb_picker import RGBPicker
-from CapstoneQuillxo.menu.menu_system import menu_start_async
+from commands import ClearCanvasCommand
+from core import UserManager
+from core.color import Color, Tool
+from ui import ButtonManager
+from ui.rgb_picker import RGBPicker
+from menu.menu_system import menu_start_async
 
 # --- ASYNC MAIN WRAPPER ---
 async def main():
-    # Begin Menu
+    # Begin Menu — pygame.init() is called inside menu_start_async
     menu_session_info = await menu_start_async()
     room_name = menu_session_info[0]
-    print(room_name)
+    print(f"[Debug] Menu done, room: {room_name}")
+    print(f"[Debug] IS_WEB = {sys.platform}")
 
-    # Begin Game
-    pygame.init()
+    # Test js module availability
+    try:
+        import js
+        print(f"[Debug] js module available: {js.window.firebaseDB}")
+    except Exception as e:
+        print(f"[Debug] js module error: {e}")
 
+    # Begin Game — reuse existing pygame display, don't reinitialize
     screen = pygame.display.set_mode((900, 640))
+    print(f"[Debug] Screen created: {screen}")
     pygame.display.set_caption("CapstoneQuillxo")
     font = pygame.font.Font("freesansbold.ttf", 18)
+    print(f"[Debug] Font loaded")
 
     umanager = UserManager(room_name)
+    print(f"[Debug] UserManager created")
     umanager.add_user(screen)
+    print(f"[Debug] User added, starting game loop")
 
     running = True
     clock = pygame.time.Clock()
@@ -56,7 +67,7 @@ async def main():
 
         for event in events:
             if event.type == pygame.QUIT:
-                running = False # Use flag instead of SystemExit for cleaner web exit
+                running = False
 
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 if menu_button_rect.collidepoint(event.pos):
@@ -77,7 +88,10 @@ async def main():
         if menu_open:
             hovering_ui = hovering_ui or tool_buttons.is_hovering_ui or rgb_picker.is_hovering()
 
-        # Render 
+        # Update first, then render
+        umanager.update(hovering_ui, events)
+
+        # Render
         umanager.draw()
         pygame.draw.rect(screen, Color.PURPLE.value, all_button_rect)
         top_buttons.draw(screen)
@@ -97,13 +111,12 @@ async def main():
             rgb_picker.draw()
 
         umanager.draw_cursor()
-        umanager.update(hovering_ui, events)
 
         pygame.display.flip()
-        
+
         # --- WEB ESSENTIALS ---
-        await asyncio.sleep(0)  # Mandatory: yields control back to the browser
-        clock.tick(60)         # 120 FPS is very high for web; 60 is safer
+        await asyncio.sleep(0)
+        clock.tick(60)
 
     pygame.quit()
 

@@ -70,7 +70,13 @@ class Cursor:
 
     def handle_brush(self, mouse_down, mouse_pos):
         if mouse_down:
-            self.current_stroke.append(PaintDot(16, mouse_pos, self.color))
+            if self.current_stroke:
+                last_dot = self.current_stroke[-1]
+                last_pos = (last_dot.x + 8, last_dot.y + 8)
+                dots = self.make_line_dots(last_pos, mouse_pos, 16, self.color)
+                self.current_stroke.extend(dots)
+            else:
+                self.current_stroke.append(PaintDot(16, mouse_pos, self.color))
         else:
             self.finish_stroke()
 
@@ -78,25 +84,49 @@ class Cursor:
         if mouse_down:
             spray_radius = 16
             dots_per_frame = 18
-
-            for _ in range(dots_per_frame):
-                angle = random.uniform(0, math.tau)
-                distance = random.uniform(0, spray_radius)
-                offset_x = math.cos(angle) * distance
-                offset_y = math.sin(angle) * distance
-                dot_pos = (mouse_pos[0] + offset_x, mouse_pos[1] + offset_y)
-
-                self.current_stroke.append(
-                    PaintDot(4, dot_pos, self.color, alpha=180, shape="circle")
-                )
+            if self.current_stroke:
+                last_dot = self.current_stroke[-1]
+                last_pos = (last_dot.x + 2, last_dot.y + 2)
+                distance = math.dist(last_pos, mouse_pos)
+                steps = max(1, int(distance / 8))
+                for i in range(steps):
+                    t = i / steps
+                    x = last_pos[0] + (mouse_pos[0] - last_pos[0]) * t
+                    y = last_pos[1] + (mouse_pos[1] - last_pos[1]) * t
+                    for _ in range(dots_per_frame // steps):
+                        angle = random.uniform(0, math.tau)
+                        distance_r = random.uniform(0, spray_radius)
+                        dot_pos = (x + math.cos(angle) * distance_r,
+                                   y + math.sin(angle) * distance_r)
+                        self.current_stroke.append(
+                            PaintDot(4, dot_pos, self.color, alpha=180, shape="circle")
+                        )
+            else:
+                for _ in range(dots_per_frame):
+                    angle = random.uniform(0, math.tau)
+                    distance_r = random.uniform(0, spray_radius)
+                    dot_pos = (mouse_pos[0] + math.cos(angle) * distance_r,
+                               mouse_pos[1] + math.sin(angle) * distance_r)
+                    self.current_stroke.append(
+                        PaintDot(4, dot_pos, self.color, alpha=180, shape="circle")
+                    )
         else:
             self.finish_stroke()
 
     def handle_marker(self, mouse_down, mouse_pos):
         if mouse_down:
-            self.current_stroke.append(
-                PaintDot(24, mouse_pos, self.color, alpha=153, shape="circle")
-            )
+            if self.current_stroke:
+                last_dot = self.current_stroke[-1]
+                last_pos = (last_dot.x + 12, last_dot.y + 12)
+                dots = self.make_line_dots(last_pos, mouse_pos, 24, self.color)
+                for dot in dots:
+                    self.current_stroke.append(
+                        PaintDot(24, (dot.x + 12, dot.y + 12), self.color, alpha=153, shape="circle")
+                    )
+            else:
+                self.current_stroke.append(
+                    PaintDot(24, mouse_pos, self.color, alpha=153, shape="circle")
+                )
         else:
             self.finish_stroke()
 

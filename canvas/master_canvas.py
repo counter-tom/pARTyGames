@@ -1,5 +1,5 @@
 import pygame
-from core import Color
+from core.color import Color
 
 class MasterCanvas:
     def __init__(self):

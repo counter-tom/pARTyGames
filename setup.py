@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="CapstoneQuillxo",
+    name="partygames",
     version="0.1.0",
     description="Multiplayer drawing app built with Pygame and Firebase",
     packages=find_packages(),

@@ -1,5 +1,5 @@
 <html lang="en-us"><script src="https://pygame-web.github.io/cdn/0.9.3/pythons.js" type=module id="site" data-python="python3.12" data-LINES=42 data-COLUMNS=132 data-os="vtx,snd,gui" async defer>#<!--
-# ignore problem above, vscode html is strict. Its not a problem
+
 print("""
 Loading capstonequillxo from capstonequillxo.apk
     Pygbag Version : 0.9.3
@@ -103,16 +103,6 @@ async def custom_site():
 asyncio.run( custom_site() )
 
 
-
-
-
-
-
-
-
-
-
-
 # BEGIN BLOCK
 #
 # now this is the html part you can (and should) customize
@@ -124,24 +114,9 @@ asyncio.run( custom_site() )
 # =============================================================================
 # --></script><head><!--
 //=============================================================================
-//
-//
-//
-//
-//
-//
-//
-
-    {%- if cookiecutter.comment != "" -%}
-{{cookiecutter.comment}}
-    {% endif %}
 
 --><script type="application/javascript">
 // END BLOCK
-
-
-
-// this dict is available under PyConfig.config from __main__
 
 config = {
     xtermjs : "1" ,
@@ -149,12 +124,12 @@ config = {
     user_canvas : 0,
     user_canvas_managed : 0,
     gui_divider : 2,
-    ume_block : 1,
+    ume_block : 0,
     can_close : 0,
     archive : "capstonequillxo",
     gui_debug : 2,
     cdn : "https://pygame-web.github.io/cdn/0.9.3/",
-    autorun : 0,
+    autorun : 1,
     PYBUILD : "3.12",
     fb_ar   :  1.77,
     fb_width : "1280",
@@ -163,15 +138,10 @@ config = {
 
 function show_infobox() {
     infobox.style.display = "block";
-
-    // Measure box
     const w = infobox.offsetWidth;
     const h = infobox.offsetHeight;
-
-    // Center in viewport
     const left = (window.innerWidth - w) / 2;
     const top = (window.innerHeight - h) / 2;
-
     infobox.style.left = left + "px";
     infobox.style.top = top + "px";
 }
@@ -185,8 +155,6 @@ function show_infobox() {
     <meta name="viewport" content="height=device-height, initial-scale=1.0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes"/>
-
-
     <link rel="icon" type="image/png" href="favicon.png" sizes="16x16">
 
     <style>
@@ -198,126 +166,79 @@ function show_infobox() {
             font-weight: bold;
             color: rgb(120, 120, 120);
         }
-
-        #progress {
-            height: 20px;
-            width: 300px;
-        }
-
+        #progress { height: 20px; width: 300px; }
         #infobox {
-            position: fixed; /* center relative to viewport */
+            position: fixed;
             background: green;
             color: blue;
             font-weight: bold;
             padding: 12px 24px;
- /*           display: none; */
             z-index: 999999;
         }
         div.emscripten { text-align: center; }
         div.emscripten_border { border: 1px solid black; }
         div.thick_border { border: 4px solid black; }
-
-        /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-        /* average size of droid screen 470dp x 320dp  */
         canvas.emscripten {
             border: 0px none;
             background-color: transparent;
             width: 100%;
             height: 100%;
             z-index: 5;
-
             padding: 0;
             margin: 0 auto;
-
             position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            top: 0; bottom: 0; left: 0; right: 0;
         }
-
         body {
             font-family: arial;
             margin: 0;
             padding: none;
             background-color:powderblue;
         }
-
-        .topright{
-           position:absolute;
-           top:0px;
-           right:0px;
-        }
-
-        .bottomright {
-            position:absolute;
-            top: 40%;
-            right: 0px;
-        }
-
-        .center {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .trinfo{
-           position: relative;
-           right: 0px;
-           border: 1px solid black;
-        }
-
-        .framed{
-           position: relative;
-           top: 150px;
-           right: 10px;
-           border: 1px solid black;
-        }
+        .topright { position:absolute; top:0px; right:0px; }
+        .bottomright { position:absolute; top: 40%; right: 0px; }
+        .center { display: flex; align-items: center; justify-content: center; }
+        .trinfo { position: relative; right: 0px; border: 1px solid black; }
+        .framed { position: relative; top: 150px; right: 10px; border: 1px solid black; }
     </style>
 
-    <script>
-/*
-        if (navigator.serviceWorker)
-            navigator.serviceWorker.register("https://pygame-web.github.io/cdn/0.9.3/pygbag0.9.3.js")
-        else
-            console.warn("Service workers not supported")
-*/
-    </script>
-
-    <script src="https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js"></script>
+<script src="https://pygame-web.github.io/cdn/0.9.3/browserfs.min.js"></script>
+<script>
+if (typeof BrowserFS !== 'undefined') {
+    BrowserFS.install(window);
+    BrowserFS.configure({ fs: "InMemory" }, function(e) {
+        if (e) console.error("BrowserFS error:", e);
+    });
+}
+</script>
 
 </head>
 
 <body>
-
+    <script>
+    // Pre-load BrowserFS to satisfy pygbag's requirement
+    window.BrowserFS = {
+        install: function() {},
+        configure: function(_, cb) { if(cb) cb(); }
+    };
+    </script>
     <div id="transfer" align=center>
-<!--        <div class="spinner" id='spinner'></div> -->
         <div class="emscripten" id="status">Downloading...</div>
         <div class="emscripten">
             <progress value="0" max="100" id="progress"></progress>
         </div>
     </div>
 
+    <canvas class="emscripten" id="canvas" width="1px" height="1px"
+        oncontextmenu="event.preventDefault()" tabindex=1></canvas>
 
-
-    <canvas class="emscripten" id="canvas"
-width="1px"
-height="1px"
-    oncontextmenu="event.preventDefault()" tabindex=1>
-    </canvas>
-
-    <canvas class="emscripten" id="canvas3d"
-width="1280px"
-height="720px"
-    oncontextmenu="event.preventDefault()" tabindex=1 hidden>
-    </canvas>
+    <canvas class="emscripten" id="canvas3d" width="1280px" height="720px"
+        oncontextmenu="event.preventDefault()" tabindex=1 hidden></canvas>
 
     <div id="infobox">Loading, please wait ...</div>
-
     <div id=html></div>
 
-    <div id=crt  class=bottomright >
-
+    <div id=crt class=bottomright>
         <div id="system" hidden>
             <div class="button-container">
                 <button id="aiostop" disabled>AIO ⏏︎</button>
@@ -325,29 +246,23 @@ height="720px"
                 <button id="aiopaused_false" disabled>AIO ▶</button>
                 <button id="pygame_mixer_music_pause" disabled>Music ■</button>
             </div>
-
             <div class="button-container">
                 <div id=load_min>min</div>
                 <div id=load_avg>avg</div>
                 <div id=load_max>max</div>
-              <button id="load_rst" disabled>RESET</button>
+                <button id="load_rst" disabled>RESET</button>
             </div>
-
             <div id="level">(battery level unknown)</div>
             <div id="stateBattery">(charging state unknown)</div>
-
         </div>
 
         <div id=box class="emscripten_border" hidden=true>
-
             <div id="info" class="trinfo"></div>
-
             <iframe id="iframe" class="framed" name="iframe"
-width="470px" height="90%"
-allowtransparency="true"
-style="z-index: 10;"
-style="background: #FFFFFF;"
-frameborder="1"
+                width="470px" height="90%"
+                allowtransparency="true"
+                style="z-index: 10; background: #FFFFFF;"
+                frameborder="1"
                 allowfullscreen="true"
                 webkitallowfullscreen="true"
                 msallowfullscreen="true"
@@ -358,9 +273,7 @@ frameborder="1"
                 scrolling="yes">
             </iframe>
         </div>
-
     </div>
-
 
     <div id="dlg" hidden>
         <input type="file" id="dlg_multifile" multiple accept="image/*">
@@ -377,35 +290,25 @@ frameborder="1"
         console.warn("TODO: panda3d canvas monitor", self, ecw, ech)
     }
 
-    async function custom_onload(debug_hidden) {
-        // this is called before anything python is loaded
-        // make your js customization here
-        console.log(__FILE__, "custom_onload")
-
-        pyconsole.hidden = debug_hidden
-        system.hidden = debug_hidden
-        transfer.hidden = debug_hidden
-        info.hidden = debug_hidden
-        box.hidden =  debug_hidden
-
-        show_infobox()
-    }
+async function custom_onload(debug_hidden) {
+    console.log(__FILE__, "custom_onload")
+    pyconsole.hidden = debug_hidden
+    system.hidden = debug_hidden
+    transfer.hidden = debug_hidden
+    info.hidden = debug_hidden
+    box.hidden = debug_hidden
+    show_infobox()
+}
 
     function custom_prerun(){
-        // no python main and no (MEMFS + VFS) yet.
         console.log(__FILE__, "custom_prerun")
-
     }
 
     function custom_postrun(){
-        // python main and no VFS filesystem yet.
         console.log(__FILE__, "custom_postrun")
-
     }
 
     function debug() {
-        // allow to gain access to dev tools from js console
-        // but only on desktop. difficult to reach when in iframe
         python.config.debug = true
         custom_onload(false)
         Module.PyRun_SimpleString("shell.uptime()")
@@ -417,21 +320,75 @@ frameborder="1"
     }
 
     function info_online(url) {
-        // display info about current APK
-        fetch( url /*, options */)
+        fetch(url)
             .then((response) => response.text())
-            .then((html) => {
-                info_inline(html);
-        })
-        .catch((error) => {
-            console.warn(error);
-        });
+            .then((html) => { info_inline(html); })
+            .catch((error) => { console.warn(error); });
     }
 
     function frame_online(url) {
         window.frames["iframe"].location = url;
     }
 
+    </script>
+
+<!-- Firebase JS SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script>
+    const FIREBASE_CONFIG = {
+        apiKey:            "AIzaSyDYa24MRLltJeyCkBkhWW9hUf85moG0N7o",
+        authDomain:        "partygames-ee33c.firebaseapp.com",
+        databaseURL:       "https://partygames-ee33c-default-rtdb.firebaseio.com",
+        projectId:         "partygames-ee33c",
+        storageBucket:     "partygames-ee33c.firebasestorage.app",
+        messagingSenderId: "447203127083",
+        appId:             "1:447203127083:web:bc3a656ab71ff47c375f6e"
+    };
+
+    firebase.initializeApp(FIREBASE_CONFIG);
+    window.firebaseDB      = firebase.database();
+    window.FIREBASE_DB_URL = FIREBASE_CONFIG.databaseURL;
+    window.INITIAL_STROKES = null;
+    window.INCOMING_STROKES = [];
+    window.OUTGOING_STROKES = [];
+    window.MY_USER_ID = null;
+    window.CURRENT_ROOM = "room1";
+    window.PUSH_CLEAR = false;
+
+    // Load initial strokes
+    window.firebaseDB.ref("rooms/room1/strokes").get().then(snap => {
+        window.INITIAL_STROKES = snap.val();
+    }).catch(e => {
+        console.warn("Could not pre-fetch strokes:", e);
+    });
+
+    window.firebaseDB.ref("rooms/room1/strokes").on("child_added", function(snap) {
+        const stroke = snap.val();
+        if (stroke) {
+            window.INCOMING_STROKES.push(stroke);
+        }
+    });
+
+    // Push outgoing strokes every 100ms
+    setInterval(function() {
+        while (window.OUTGOING_STROKES.length > 0) {
+            const stroke = window.OUTGOING_STROKES.shift();
+            window.firebaseDB.ref("rooms/" + window.CURRENT_ROOM + "/strokes").push(stroke);
+        }
+        if (window.PUSH_CLEAR) {
+            window.PUSH_CLEAR = false;
+            const room = window.CURRENT_ROOM;
+            window.firebaseDB.ref("rooms/" + room + "/strokes").set({});
+            window.firebaseDB.ref("rooms/" + room + "/strokes").push({
+                uid: window.MY_USER_ID,
+                color: [225, 225, 225],
+                dots: [{x: -500, y: -500, size: 2000}],
+                ts: Date.now(),
+                is_clear: true
+            });
+        }
+    }, 100);
     </script>
 
 </body>
