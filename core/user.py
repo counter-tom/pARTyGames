@@ -1,3 +1,4 @@
+from core.color import Tool
 from canvas import PaintCanvas
 from drawing import Cursor
 from commands import CommandManager
@@ -14,7 +15,8 @@ class User:
         self.cursor = Cursor(screen, self.current_stroke, self.canvas, self.commander, self.color)
 
     def update(self, is_cursor_on_ui):
-        self.cursor.color = self.color
+        if self.cursor.tool != Tool.ERASER:
+            self.cursor.color = self.color
 
         if not is_cursor_on_ui:
             self.cursor.update()

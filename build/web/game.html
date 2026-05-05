@@ -352,6 +352,8 @@ async function custom_onload(debug_hidden) {
     window.INITIAL_STROKES = null;
     window.INCOMING_STROKES = [];
     window.OUTGOING_STROKES = [];
+    window.OUTGOING_CHAT = [];
+    window.INCOMING_CHAT = [];
     window.MY_USER_ID = null;
     window.CURRENT_ROOM = "room1";
     window.PUSH_CLEAR = false;
@@ -363,6 +365,7 @@ async function custom_onload(debug_hidden) {
         console.warn("Could not pre-fetch strokes:", e);
     });
 
+    // Real-time stroke listener
     window.firebaseDB.ref("rooms/room1/strokes").on("child_added", function(snap) {
         const stroke = snap.val();
         if (stroke) {
@@ -370,11 +373,23 @@ async function custom_onload(debug_hidden) {
         }
     });
 
-    // Push outgoing strokes every 100ms
+    // Real-time chat listener
+    window.firebaseDB.ref("rooms/room1/chat").on("child_added", function(snap) {
+        const msg = snap.val();
+        if (msg && msg.uid !== window.MY_USER_ID) {
+            window.INCOMING_CHAT.push(msg);
+        }
+    });
+
+    // Push outgoing strokes and chat every 100ms
     setInterval(function() {
         while (window.OUTGOING_STROKES.length > 0) {
             const stroke = window.OUTGOING_STROKES.shift();
             window.firebaseDB.ref("rooms/" + window.CURRENT_ROOM + "/strokes").push(stroke);
+        }
+        while (window.OUTGOING_CHAT.length > 0) {
+            const msg = window.OUTGOING_CHAT.shift();
+            window.firebaseDB.ref("rooms/" + window.CURRENT_ROOM + "/chat").push(msg);
         }
         if (window.PUSH_CLEAR) {
             window.PUSH_CLEAR = false;

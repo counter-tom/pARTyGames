@@ -7,33 +7,72 @@ from core.color import Color, Tool
 from ui import ButtonManager
 from ui.rgb_picker import RGBPicker
 from menu.menu_system import menu_start_async
+from ui.tool_grid import ToolGrid
+
+IS_WEB = sys.platform == "emscripten"
+
+def wrap_text(text, font, max_width):
+    """Break text into lines that fit within max_width pixels."""
+    words = text.split(' ')
+    lines = []
+    current = ""
+    for word in words:
+        test = f"{current} {word}".strip()
+        if font.size(test)[0] <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def draw_outlined_text(surface, text, font, pos, text_color, outline_color):
+    x, y = pos
+    outline_surface = font.render(text, True, outline_color)
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            if dx != 0 or dy != 0:
+                surface.blit(outline_surface, (x + dx, y + dy))
+    text_surface = font.render(text, True, text_color)
+    surface.blit(text_surface, (x, y))
+
 
 # --- ASYNC MAIN WRAPPER ---
 async def main():
-    # Begin Menu — pygame.init() is called inside menu_start_async
+    # Begin Menu
     menu_session_info = await menu_start_async()
     room_name = menu_session_info[0]
-    print(f"[Debug] Menu done, room: {room_name}")
-    print(f"[Debug] IS_WEB = {sys.platform}")
+    gamemode  = menu_session_info[1] if len(menu_session_info) > 1 else "freedraw"
+    print(f"[Debug] Menu done, room: {room_name}, gamemode: {gamemode}")
 
-    # Test js module availability
-    try:
-        import js
-        print(f"[Debug] js module available: {js.window.firebaseDB}")
-    except Exception as e:
-        print(f"[Debug] js module error: {e}")
+    # Fetch gamemode from Firebase if joiner
+    if gamemode == "fetch" and not IS_WEB:
+        from network import FirebaseClient
+        import uuid
+        temp_client = FirebaseClient(room_id=room_name, user_id=str(uuid.uuid4())[:8])
+        gamemode = temp_client.fetch_gamemode()
+        print(f"[Game] Fetched gamemode: {gamemode}")
 
-    # Begin Game — reuse existing pygame display, don't reinitialize
-    screen = pygame.display.set_mode((900, 640))
-    print(f"[Debug] Screen created: {screen}")
-    pygame.display.set_caption("CapstoneQuillxo")
+    in_lobby = True
+
+    # Prevent canvas from being marked when starting
+    while pygame.mouse.get_pressed()[0]:
+        pygame.event.pump()
+        await asyncio.sleep(0)
+    pygame.event.clear()
+
+    # Begin Game — reuse existing pygame display
+    screen = pygame.display.set_mode((1160, 640))
+    pygame.display.set_caption("pARTyGames")
     font = pygame.font.Font("freesansbold.ttf", 18)
-    print(f"[Debug] Font loaded")
 
-    umanager = UserManager(room_name)
-    print(f"[Debug] UserManager created")
+    umanager = UserManager(room_name, gamemode=gamemode)
+    if not IS_WEB:
+        umanager.firebase.push_gamemode(gamemode)
     umanager.add_user(screen)
-    print(f"[Debug] User added, starting game loop")
 
     running = True
     clock = pygame.time.Clock()
@@ -41,84 +80,192 @@ async def main():
     menu_open = False
 
     top_buttons = ButtonManager(screen)
-    tool_buttons = ButtonManager(screen)
+    tool_grid = ToolGrid(screen, 665, 140, font, columns=3)
 
     top_buttons.add_button("Clear", (665, 10), lambda: umanager.get_clear_command())
-    top_buttons.add_button("Undo",  (665, 45),  lambda: umanager.get_active_user().commander.undo())
-    top_buttons.add_button("Redo",  (665, 80),  lambda: umanager.get_active_user().commander.redo())
+    top_buttons.add_button("Undo",  (665, 45), lambda: umanager.get_active_user().commander.undo())
+    top_buttons.add_button("Redo",  (665, 80), lambda: umanager.get_active_user().commander.redo())
 
-    tool_buttons.add_button("Brush",  (665, 140), lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.BRUSH))
-    tool_buttons.add_button("Spray",  (665, 175), lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.SPRAY))
-    tool_buttons.add_button("Marker", (665, 210), lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.MARKER))
-    tool_buttons.add_button("Bucket", (665, 245), lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.BUCKET))
-    tool_buttons.add_button("Line",   (665, 280), lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.LINE))
+    tool_grid.add_tool(Tool.NEUTRAL,     lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.NEUTRAL),
+        image_path="assets/neutral.png", selected_image_path="assets/neutral_selected.png", label="NEU")
+    tool_grid.add_tool(Tool.BRUSH,       lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.BRUSH),
+        image_path="assets/brush.png", selected_image_path="assets/brush_selected.png", label="PEN")
+    tool_grid.add_tool(Tool.SPRAY,       lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.SPRAY),
+        image_path="assets/spray.png", selected_image_path="assets/spray_selected.png", label="SPR")
+    tool_grid.add_tool(Tool.MARKER,      lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.MARKER),
+        image_path="assets/marker.png", selected_image_path="assets/marker_selected.png", label="MAR")
+    tool_grid.add_tool(Tool.BUCKET,      lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.BUCKET),
+        image_path="assets/bucket.png", selected_image_path="assets/bucket_selected.png", label="BUC")
+    tool_grid.add_tool(Tool.LINE,        lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.LINE),
+        image_path="assets/line.png", selected_image_path="assets/line_selected.png", label="LIN")
+    tool_grid.add_tool(Tool.EYEDROPPER,  lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.EYEDROPPER),
+        image_path="assets/eyedropper.png", selected_image_path="assets/eyedropper_selected.png", label="EYE")
+    tool_grid.add_tool(Tool.ERASER,      lambda: setattr(umanager.get_active_user().cursor, "tool", Tool.ERASER),
+        image_path="assets/eraser.png", selected_image_path="assets/eraser_selected.png", label="ERA")
 
     rgb_picker = RGBPicker(screen, 700, 370, font)
     all_button_rect  = pygame.Rect(640, 0,   260, 900)
     menu_button_rect = pygame.Rect(665, 115, 150,  25)
 
-    while running:
-        screen.fill(Color.PURPLE.value)
-        events = pygame.event.get()
+    active_user = umanager.get_active_user()
+    if active_user is not None:
+        active_user.cursor.rgb_picker = rgb_picker
 
-        top_buttons.update()
-        if menu_open:
-            tool_buttons.update()
+    # Chatroom variables
+    chat_messages = []
+    chat_text = ""
+    chat_active = False
+    chat_color_inactive = pygame.Color('gray')
+    chat_color_active   = pygame.Color('dodgerblue')
+    chat_color = chat_color_inactive
 
-        for event in events:
-            if event.type == pygame.QUIT:
-                running = False
+    chat_input_box    = pygame.Rect(905, 600, 250, 35)
+    chat_display_rect = pygame.Rect(905,   5, 250, 585)
+    chatroom_rect     = pygame.Rect(900,   0, 260, 640)
 
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                if menu_button_rect.collidepoint(event.pos):
-                    menu_open = not menu_open
-                    continue
+    try:
+        while running:
+            screen.fill(Color.PURPLE.value)
+            events = pygame.event.get()
 
-            top_buttons.handle_events(event)
+            top_buttons.update()
             if menu_open:
-                tool_buttons.handle_events(event)
-                rgb_picker.handle_event(event)
+                tool_grid.update()
 
-        active_user = umanager.get_active_user()
-        if active_user is not None:
-            active_user.color = rgb_picker.get_color()
-            active_user.cursor.color = active_user.color
+            input_locked = umanager.is_input_locked()
 
-        hovering_ui = top_buttons.is_hovering_ui or menu_button_rect.collidepoint(pygame.mouse.get_pos())
-        if menu_open:
-            hovering_ui = hovering_ui or tool_buttons.is_hovering_ui or rgb_picker.is_hovering()
+            for event in events:
+                if event.type == pygame.QUIT:
+                    running = False
 
-        # Update first, then render
-        umanager.update(hovering_ui, events)
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    if menu_button_rect.collidepoint(event.pos):
+                        menu_open = not menu_open
+                        continue
 
-        # Render
-        umanager.draw()
-        pygame.draw.rect(screen, Color.PURPLE.value, all_button_rect)
-        top_buttons.draw(screen)
+                if not input_locked:
+                    top_buttons.handle_events(event)
+                if menu_open:
+                    if not input_locked:
+                        tool_grid.handle_events(event)
+                    rgb_picker.handle_event(event)
 
-        btn_color = (Color.BUTTON_ACTIVE_GREY.value
-                     if menu_button_rect.collidepoint(pygame.mouse.get_pos())
-                     else Color.BUTTON_INACTIVE_GREY.value)
-        pygame.draw.rect(screen, btn_color, menu_button_rect, 0, 5)
-        pygame.draw.rect(screen, Color.BLACK.value,  menu_button_rect, 2, 5)
-        menu_text = font.render("Hide Menu" if menu_open else "Show Menu", True, Color.BLACK.value)
-        screen.blit(menu_text, (menu_button_rect.x + 8, menu_button_rect.y + 3))
+                # Chat events
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if chat_input_box.collidepoint(event.pos):
+                        chat_active = True
+                        chat_color = chat_color_active
+                    else:
+                        chat_active = False
+                        chat_color = chat_color_inactive
 
-        if menu_open:
-            pygame.draw.rect(screen, (201, 138, 44),   (650, 135, 240, 495))
-            pygame.draw.rect(screen, Color.BLACK.value, (650, 135, 240, 495), 2)
-            tool_buttons.draw(screen)
-            rgb_picker.draw()
+                if event.type == pygame.KEYDOWN and chat_active:
+                    if event.key == pygame.K_RETURN or event.key == pygame.K_KP_ENTER:
+                        if chat_text.strip():
+                            if umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
+                                umanager.check_guess(chat_text)
+                            umanager.firebase.push_chat_message(chat_text)
+                            umanager.incoming_chat.append((umanager.firebase.user_id, chat_text))
+                            chat_text = ""
+                    elif event.key == pygame.K_BACKSPACE:
+                        chat_text = chat_text[:-1]
+                    else:
+                        chat_text += event.unicode
 
-        umanager.draw_cursor()
+            active_user = umanager.get_active_user()
+            if active_user is not None:
+                active_user.color = rgb_picker.get_color()
+                if active_user.cursor.tool != Tool.ERASER:
+                    active_user.cursor.color = active_user.color
+                active_user.cursor.rgb_picker = rgb_picker
 
-        pygame.display.flip()
+            hovering_ui = (top_buttons.is_hovering_ui
+                        or menu_button_rect.collidepoint(pygame.mouse.get_pos())
+                        or all_button_rect.collidepoint(pygame.mouse.get_pos())
+                        or chatroom_rect.collidepoint(pygame.mouse.get_pos())
+                        or input_locked)
 
-        # --- WEB ESSENTIALS ---
-        await asyncio.sleep(0)
-        clock.tick(60)
+            if menu_open:
+                hovering_ui = hovering_ui or tool_grid.is_hovering_ui or rgb_picker.is_hovering()
+
+            # Update first
+            umanager.update(hovering_ui, events)
+
+            # Render
+            umanager.draw()
+            pygame.draw.rect(screen, Color.PURPLE.value, all_button_rect)
+            top_buttons.draw(screen)
+
+            # Chat sidebar
+            pygame.draw.rect(screen, Color.WHITE.value, chatroom_rect)
+
+            line_height = 22
+            max_chat_width = chat_display_rect.width - 8
+
+            all_wrapped = []
+            for uid, msg in chat_messages:
+                first_line = True
+                for wrapped_line in wrap_text(f"{uid}: {msg}", font, max_chat_width):
+                    all_wrapped.append((wrapped_line, first_line))
+                    first_line = False
+
+            visible_lines = chat_display_rect.height // line_height
+            visible = all_wrapped[-visible_lines:]
+
+            for i, (line, _) in enumerate(visible):
+                msg_surface = font.render(line, True, (0, 0, 0))
+                screen.blit(msg_surface, (chat_display_rect.x + 4, chat_display_rect.y + i * line_height))
+
+            pygame.draw.line(screen, pygame.Color('gray'), (900, 595), (1160, 595), 2)
+
+            chat_txt_surface = font.render(chat_text, True, (0, 0, 0))
+            screen.blit(chat_txt_surface, (chat_input_box.x + 5, chat_input_box.y + 5))
+            pygame.draw.rect(screen, chat_color, chat_input_box, 2)
+
+            # Menu toggle button
+            btn_color = (Color.BUTTON_ACTIVE_GREY.value
+                         if menu_button_rect.collidepoint(pygame.mouse.get_pos())
+                         else Color.BUTTON_INACTIVE_GREY.value)
+            pygame.draw.rect(screen, btn_color, menu_button_rect, 0, 5)
+            pygame.draw.rect(screen, Color.BLACK.value, menu_button_rect, 2, 5)
+            menu_text = font.render("Hide Menu" if menu_open else "Show Menu", True, Color.BLACK.value)
+            screen.blit(menu_text, (menu_button_rect.x + 8, menu_button_rect.y + 3))
+
+            if menu_open:
+                pygame.draw.rect(screen, (201, 138, 44),   (650, 135, 240, 495))
+                pygame.draw.rect(screen, Color.BLACK.value, (650, 135, 240, 495), 2)
+                active_user = umanager.get_active_user()
+                if active_user is not None:
+                    tool_grid.draw(active_user.cursor.tool)
+                rgb_picker.draw()
+
+            umanager.draw_cursor()
+
+            # Pictionary overlay
+            if umanager.i_am_drawer and umanager.current_word:
+                draw_outlined_text(screen, f"Draw: {umanager.current_word}",
+                    font, (10, 10), (255, 255, 255), (0, 0, 0))
+            elif umanager.gamemode == "pictionary" and not umanager.i_am_drawer:
+                draw_outlined_text(screen, "Guess the drawing!",
+                    font, (10, 10), (255, 255, 255), (0, 0, 0))
+
+            # Receive incoming chat
+            for uid, msg in getattr(umanager, 'incoming_chat', []):
+                chat_messages.append((uid, msg))
+            umanager.incoming_chat = []
+
+            pygame.display.flip()
+
+            # --- WEB ESSENTIALS ---
+            await asyncio.sleep(0)
+            clock.tick(60)
+
+    finally:
+        if in_lobby and not IS_WEB:
+            umanager.on_exit()
 
     pygame.quit()
+
 
 # Entry point
 if __name__ == "__main__":

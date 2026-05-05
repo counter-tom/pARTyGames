@@ -1,4 +1,4 @@
-from enum import Enum
+﻿from enum import Enum
 
 class Color(Enum):
     WHITE = (225, 225, 225)
@@ -13,8 +13,11 @@ class Color(Enum):
     
 
 class Tool(Enum):
+    NEUTRAL = 0
     BRUSH = 1
     SPRAY = 2
     MARKER = 3
     BUCKET = 4
     LINE = 5
+    EYEDROPPER = 6
+    ERASER = 7

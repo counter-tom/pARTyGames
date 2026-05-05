@@ -21,6 +21,8 @@ class _RawColor:
 
 
 def deserialize_stroke(stroke_dict: dict) -> Stroke:
+    if "color" not in stroke_dict:
+        return Stroke([], remote=True)  # skip invalid strokes
     r, g, b = stroke_dict["color"]
     color = _RawColor(r, g, b)
     dots = []
@@ -30,4 +32,9 @@ def deserialize_stroke(stroke_dict: dict) -> Stroke:
         centre_y = dot_data["y"] + size / 2
         dot = PaintDot(size, (centre_x, centre_y), color)
         dots.append(dot)
-    return Stroke(dots, remote=True)  # <-- flag it
+    stroke = Stroke(dots, color, remote=True)
+    if stroke_dict.get("is_fill"):
+        stroke.is_fill = True
+        stroke.fill_pos = (int(stroke_dict["dots"][0]["x"]), int(stroke_dict["dots"][0]["y"]))
+        stroke.fill_color = (r, g, b)
+    return stroke

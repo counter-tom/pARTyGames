@@ -78,6 +78,11 @@ class RGBPicker:
 
     def get_color(self):
         return (self.red_value, self.green_value, self.blue_value)
+    
+    def set_color(self, rgb):
+        self.red_value = max(0, min(255, rgb[0]))
+        self.green_value = max(0, min(255, rgb[1]))
+        self.blue_value = max(0, min(255, rgb[2]))
 
     def is_hovering(self):
         mouse_pos = pygame.mouse.get_pos()
