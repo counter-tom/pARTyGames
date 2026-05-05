@@ -34,7 +34,15 @@ class UserManager:
         self.master = MasterCanvas()
         self.active_user_id = 0
         self.room_name = room_name
-        self.firebase = FirebaseClient(room_id=self.room_name, user_id=str(uuid.uuid4())[:8])
+        if IS_WEB:
+            try:
+                import js
+                user_id = str(js.window.DISCORD_USERNAME) or str(uuid.uuid4())[:8]
+            except:
+                user_id = str(uuid.uuid4())[:8]
+        else:
+            user_id = str(uuid.uuid4())[:8]
+        self.firebase = FirebaseClient(room_id=self.room_name, user_id=user_id)        
         self.firebase.connect()
         self.firebase.start_listener()
 

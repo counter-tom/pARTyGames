@@ -357,6 +357,10 @@ async function custom_onload(debug_hidden) {
     window.MY_USER_ID = null;
     window.CURRENT_ROOM = "room1";
     window.PUSH_CLEAR = false;
+        // Set user identity from Discord login
+    const discordUser = JSON.parse(localStorage.getItem("discord_user") || "{}");
+    window.MY_USER_ID = discordUser.username || ("guest_" + Math.random().toString(36).substr(2, 6));
+    window.DISCORD_USERNAME = window.MY_USER_ID;
 
     // Load initial strokes
     window.firebaseDB.ref("rooms/room1/strokes").get().then(snap => {
